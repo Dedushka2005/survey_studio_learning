@@ -116,7 +116,7 @@ IMPROVE = {
     96: 'Другое',
 }
 # Q11 — по всем маркам с оценкой 0-6 в Q10 (во всех категориях).
-# Q12 — по тем же маркам и дополнительно по этим маркам при любой оценке в Q10 (Ювидерм).
+# Q12 — по тем же маркам и дополнительно по этим маркам всегда, даже без оценки в Q10 (Ювидерм).
 Q12_ALWAYS = [2]
 
 qnr = Questionnaire('Aesthetics Market Assessment RU (тест)')
@@ -467,14 +467,13 @@ return Q.rows.hasVisible ? ok : skip;
 ''')
 
 # Q11-Q12 — цикл простых вопросов по маркам (после цикла по категориям):
-# марки с оценкой 0-6 в Q10 + Ювидерм при любой оценке
+# марки с оценкой 0-6 в Q10 + Ювидерм всегда
 q(8500, 'MultipleChoice', 'СЛУЖЕБНЫЙ: марки для Q11-Q12 (оценка 0-6 в Q10 + Ювидерм)',
   name='NPSLOOP', AnswerList=alist('Марки (цикл Q11-Q12)', ALL_BRANDS), before='''
 Q.reset();
 for (let code of Q.getCodes()) {
-    let score = brandScore(code);
-    if (score === undefined) continue;
-    if (isLowScore(score) || q12AlwaysBrands().indexOf(code) > -1) Q[code].checked = true;
+    // Ювидерм — всегда (даже если не оценивался в Q10), остальные — при оценке 0-6
+    if (q12AlwaysBrands().indexOf(code) > -1 || isLowScore(brandScore(code))) Q[code].checked = true;
 }
 return Q.isAnswered ? answered : skip;
 ''')

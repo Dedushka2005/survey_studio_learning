@@ -421,7 +421,7 @@
       "ExportedQuestionFlags": {},
       "ExportedSurveyFlags": {},
       "OutputColumnTemplate": "NPSLOOP",
-      "ScriptBeforeShow": "Q.reset();\nfor (let code of Q.getCodes()) {\n    let score = brandScore(code);\n    if (score === undefined) continue;\n    if (isLowScore(score) || q12AlwaysBrands().indexOf(code) > -1) Q[code].checked = true;\n}\nreturn Q.isAnswered ? answered : skip;",
+      "ScriptBeforeShow": "Q.reset();\nfor (let code of Q.getCodes()) {\n    // Ювидерм — всегда (даже если не оценивался в Q10), остальные — при оценке 0-6\n    if (q12AlwaysBrands().indexOf(code) > -1 || isLowScore(brandScore(code))) Q[code].checked = true;\n}\nreturn Q.isAnswered ? answered : skip;",
       "AnswerList": "Марки (цикл Q11-Q12)"
     },
     {
