@@ -180,12 +180,14 @@ def q(number, qtype, text, name=None, comment=None, flags=None, survey_flags=Non
     return item
 
 
-def screen_if(cond):
-    return action('JumpToEnd', cond, n1=200, t1=SCREEN_TEXT)
+def screen_if(codes):
+    """Скрипт после ответа: скринаут, если выбран один из кодов."""
+    return 'if (' + ' || '.join(f'Q.isChecked({c})' for c in codes) + ') return screenOut();'
 
 
-def refuse_if(cond):
-    return action('JumpToEnd', cond, n1=700, t1=REFUSE_TEXT)
+def refuse_if(codes):
+    """Скрипт после ответа: завершение при отказе, если выбран один из кодов."""
+    return 'if (' + ' || '.join(f'Q.isChecked({c})' for c in codes) + ') return refuseOut();'
 
 
 OTHER_TXT = {'OpenValueTxt': True}
@@ -207,7 +209,7 @@ q(5000, 'SingleChoice',
   '<p>Название медицинской/фармацевтической компании-заказчика в рамках данного исследования '
   'раскрыто не будет.</p><p><b>Желаете ли вы продолжить?</b></p>',
   name='S0', AnswerList=alist('Да/Нет', {1: 'Да', 2: 'Нет'}),
-  after_actions=[refuse_if('Q = 2')])
+  after=refuse_if([2]))
 
 q(5001, 'SingleChoice',
   '<p>Перед тем как перейти к основной части опроса, мы зададим вам несколько отборочных вопросов, '
@@ -218,13 +220,13 @@ q(5001, 'SingleChoice',
   name='S1', comment='Выберите один вариант ответа',
   AnswerList=alist('S1', {1: 'Да, все инъекционные процедуры', 2: 'Только филлеры с ГК и без ГК',
                           3: 'Только токсины', 4: 'Ничего из перечисленного'}),
-  after_actions=[screen_if('Q(code = 3 or code = 4)')])
+  after=screen_if([3, 4]))
 
 q(5002, 'SingleChoice', 'На протяжении какого времени вы лично проводите процедуры инъекции филлеров?',
   name='S2', comment='Выберите один вариант ответа',
   AnswerList=alist('S2', {1: 'Менее 1 года', 2: '1–2 года', 3: '3–5 лет', 4: '6–10 лет',
                           5: 'Более 10 лет'}),
-  after_actions=[screen_if('Q(code = 1 or code = 2)')])
+  after=screen_if([1, 2]))
 
 q(5003, 'Table_Numeric',
   'Сколько всего инъекционных процедур вы лично проводите <b>в месяц</b> в каждой из категорий?',
@@ -273,13 +275,13 @@ q(5007, 'SingleChoice',
   '<p><b>Исходя из этой информации, согласны ли вы принять участие в таком исследовании рынка?</b></p>',
   name='S7', comment='В будущем может также потребоваться повторно связаться с вами, если у нас '
                      'возникнет запрос по любой информации, которую вы предоставили для нашего анализа.',
-  AnswerList='Да/Нет', after_actions=[refuse_if('Q = 2')])
+  AnswerList='Да/Нет', after=refuse_if([2]))
 
 q(5008, 'SingleChoice',
   '<p>Мы рады предложить вам ____ в благодарность за уделенное вами время для участия в '
   'исследовании. Эта компенсация будет предоставлена через нашу международную платежную систему '
   'под названием ODIN.</p><p><b>Согласны ли вы получить оплату таким образом?</b></p>',
-  name='S8', AnswerList='Да/Нет', after_actions=[refuse_if('Q = 2')])
+  name='S8', AnswerList='Да/Нет', after=refuse_if([2]))
 
 q(5009, 'SingleChoice', 'Согласны ли вы на то, чтобы с вами повторно связались в случае запроса?',
   name='S9', AnswerList='Да/Нет')
@@ -338,7 +340,7 @@ q(5016, 'MultipleChoice', '<b>СОГЛАСИЕ УЧАСТНИКА</b>', name='CO
       2: 'ДА, я подтверждаю, что IQVIA может связываться со мной напрямую по телефону или по '
          'электронной почте с использованием контактной информации, которую я указал(а) выше.',
       3: 'ДА, я соблюдаю законы о противодействии коррупции и взяточничеству.'}),
-  after_actions=[refuse_if('not (Q = 1 and Q = 3)')])
+  after='if (!(Q.isChecked(1) && Q.isChecked(3))) return refuseOut();')
 
 # ----------------------------------------------------------------------------
 # Раздел 1: текущий объем процедур и пациентопоток
@@ -671,9 +673,14 @@ function npsFollowUpBrands(cat) {{
     return map[cat] || [];
 }}
 
-// Скринаут с результатом "Скрининг"
+// Скринаут с результатом "Скрининг" (не подходит по критериям отбора)
 function screenOut() {{
     return exitWithResult(InterviewResult.Screening, '{SCREEN_TEXT}');
+}}
+
+// Отказ от участия с результатом "Завершено"
+function refuseOut() {{
+    return exitWithResult(InterviewResult.Exited, '{REFUSE_TEXT}');
 }}
 
 // Число в строке табличного числового вопроса (0, если строка скрыта или пуста)
