@@ -115,11 +115,9 @@ IMPROVE = {
     10: 'Улучшение характеристик продукта или результатов применения',
     96: 'Другое',
 }
-# Для каких марок задавать Q11-Q12 (по ТЗ: Ювидерм + до 2 марок, выбранных заказчиком).
-# Заказчик должен дополнить списки для категорий 2 и 3 кодами марок.
-NPS_FOLLOWUP = {1: [2], 2: [], 3: []}
-# True — задавать Q11-Q12 по ВСЕМ маркам с оценкой 0-6 (NPS_FOLLOWUP тогда не используется)
-NPS_FOLLOWUP_ALL = False
+# Q11 — по всем маркам с оценкой 0-6 в Q10 (во всех категориях).
+# Q12 — по тем же маркам и дополнительно по этим маркам при любой оценке в Q10 (Ювидерм).
+Q12_ALWAYS = [2]
 
 qnr = Questionnaire('Aesthetics Market Assessment RU (тест)')
 q, alist = qnr.q, qnr.alist
@@ -468,16 +466,15 @@ if (q9.isChecked(96)) Q.rows[96].text = 'Другое: ' + (q9[96].openValueTxt 
 return Q.rows.hasVisible ? ok : skip;
 ''')
 
-# Q11-Q12 — цикл простых вопросов по маркам с оценкой 0-6 (после цикла по категориям)
-q(8500, 'MultipleChoice', 'СЛУЖЕБНЫЙ: марки для уточняющих вопросов Q11-Q12 (оценка 0-6)',
+# Q11-Q12 — цикл простых вопросов по маркам (после цикла по категориям):
+# марки с оценкой 0-6 в Q10 + Ювидерм при любой оценке
+q(8500, 'MultipleChoice', 'СЛУЖЕБНЫЙ: марки для Q11-Q12 (оценка 0-6 в Q10 + Ювидерм)',
   name='NPSLOOP', AnswerList=alist('Марки (цикл Q11-Q12)', ALL_BRANDS), before='''
 Q.reset();
-for (let cat of [1, 2, 3]) {
-    if (!((1000 + cat) in questions)) continue;
-    let q10 = questions[1000 + cat];
-    for (let code of npsFollowUpBrands(cat)) {
-        if (isNpsFollowUp(q10, code, cat)) Q[code].checked = true;
-    }
+for (let code of Q.getCodes()) {
+    let score = brandScore(code);
+    if (score === undefined) continue;
+    if (isLowScore(score) || q12AlwaysBrands().indexOf(code) > -1) Q[code].checked = true;
 }
 return Q.isAnswered ? answered : skip;
 ''')
@@ -486,8 +483,10 @@ q(110, 'Text',
   '<p>Вы оценили вероятность рекомендации марки <b>«{answerText}»</b> на {Оценка} из 10.</p>'
   '<p>По какой причине вы оценили эту марку на уровне 0–6?</p>',
   name='Q11_{3}', comment='Опишите причину своими словами', TextLineCount=3, before='''
-let cat = brandCat(Q.sourceAnswerCode);
-V['Оценка'] = questions[1000 + cat].rows[Q.sourceAnswerCode].getCheckedCode(true);
+// Q11 — только для оценок 0-6 (Ювидерм с оценкой 7-10 или «не знаю» попадает только в Q12)
+let score = brandScore(Q.sourceAnswerCode);
+if (!isLowScore(score)) return skip;
+V['Оценка'] = score;
 ''')
 
 q(120, 'MultipleChoice',
@@ -598,8 +597,6 @@ filterDropdown(Q, known);
 cat_brands_js = ', '.join(f'{c}: {sorted(BRANDS[c])}' for c in BRANDS)
 aliases_js = ',\n        '.join(f'{code}: {json.dumps(a, ensure_ascii=False)}'
                                 for code, a in BRAND_ALIASES.items())
-followup = {c: sorted(BRANDS[c]) for c in BRANDS} if NPS_FOLLOWUP_ALL else NPS_FOLLOWUP
-followup_js = ', '.join(f'{c}: {v}' for c, v in followup.items())
 
 qnr.global_functions = f'''
 // Коды марок по категориям (1 - объем и лифтинг, 2 - увлажнение, 3 - биостимуляторы)
@@ -608,10 +605,9 @@ function catBrands(cat) {{
     return map[cat] || [];
 }}
 
-// Марки, по которым задаются Q11-Q12 при оценке 0-6 (Ювидерм + марки заказчика)
-function npsFollowUpBrands(cat) {{
-    let map = {{{followup_js}}};
-    return map[cat] || [];
+// Марки, по которым Q12 задаётся при любой оценке в Q10 (Ювидерм)
+function q12AlwaysBrands() {{
+    return {Q12_ALWAYS};
 }}
 
 // Врач проводит процедуры категории (S3 > 0)
@@ -638,12 +634,17 @@ function brandCat(code) {{
     return 0;
 }}
 
-// Марка оценена на 0-6 и входит в список для уточняющих вопросов
-function isNpsFollowUp(q10, code, cat) {{
-    if (npsFollowUpBrands(cat).indexOf(code) === -1) return false;
-    let row = q10.rows[code];
-    if (row === undefined || !row.visible) return false;
-    let score = row.getCheckedCode(true);
+// Оценка марки в Q10 её категории (0-10, 99 - не знаю); undefined, если марку не оценивали
+function brandScore(code) {{
+    let qn = 1000 + brandCat(code);
+    if (!(qn in questions)) return undefined;
+    let row = questions[qn].rows[code];
+    if (row === undefined || !row.visible) return undefined;
+    return row.getCheckedCode(true);
+}}
+
+// Оценка 0-6 (критики по шкале NPS)
+function isLowScore(score) {{
     return score !== undefined && score >= 0 && score <= 6;
 }}
 
