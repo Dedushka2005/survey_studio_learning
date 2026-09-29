@@ -10,7 +10,10 @@
   5000-5022  скринер, согласия, контакты (S0-S10, CONS, CONT*)
   10-70      раздел 1 (Q1-Q7), номер = номер вопроса * 10
   8000       служебный вопрос — категории для цикла раздела 2
-  80-125     раздел 2 (Q8-Q12), цикл по категориям -> Q801..Q1253
+  8001       информационный экран раздела 2
+  80-100     раздел 2 (Q8-Q10), цикл по категориям -> Q801..Q1003
+  8500       служебный вопрос — марки с оценкой 0-6 для цикла Q11-Q12
+  110-120    Q11-Q12, цикл по маркам -> Q11001..Q12037
   130-360    раздел 3 (Q13-Q36), номер = номер вопроса * 10
 """
 import json
@@ -115,6 +118,8 @@ IMPROVE = {
 # Для каких марок задавать Q11-Q12 (по ТЗ: Ювидерм + до 2 марок, выбранных заказчиком).
 # Заказчик должен дополнить списки для категорий 2 и 3 кодами марок.
 NPS_FOLLOWUP = {1: [2], 2: [], 3: []}
+# True — задавать Q11-Q12 по ВСЕМ маркам с оценкой 0-6 (NPS_FOLLOWUP тогда не используется)
+NPS_FOLLOWUP_ALL = False
 
 qnr = Questionnaire('Aesthetics Market Assessment RU (тест)')
 q, alist = qnr.q, qnr.alist
@@ -306,7 +311,7 @@ q(30, 'Table_Numeric',
   'Если рассматривать типичный сеанс лечения, какой средний объем (мл) используется для пациентов в '
   'каждой из указанных ниже категорий филлеров <b>на сегодняшний день</b>?',
   name='Q3a', comment='Текущий средний объем (мл) на пациента. Допускаются десятичные дроби.',
-  flags={'AllowFractionalNumbers': True}, RowList=CAT_ROWS, AnswerNumberFrom=0, AnswerNumberTo=100,
+  flags={'AllowFractionalNumbers': True}, RowList=CAT_ROWS, AnswerNumberFrom=0, AnswerNumberTo=9999,
   before=ONLY_ACTIVE_CATS)
 
 q(31, 'Table_Numeric',
@@ -314,7 +319,7 @@ q(31, 'Table_Numeric',
   'назад</b>?',
   name='Q3b', comment='Допускаются десятичные дроби. Если не знаете — оставьте поле пустым.',
   flags={'AllowFractionalNumbers': True}, RowList=CAT_ROWS_OPT, AnswerNumberFrom=0,
-  AnswerNumberTo=100, before=ONLY_ACTIVE_CATS)
+  AnswerNumberTo=9999, before=ONLY_ACTIVE_CATS)
 
 q(35, 'Information',
   '<p>В рамках оставшейся части исследования мы будем рассматривать конкретно дермальные филлеры. '
@@ -383,14 +388,15 @@ return Q.rows.hasVisible ? ok : skip;
 q(70, 'Table_Numeric',
   'Из числа пациентов, получающих инъекционное эстетическое лечение, какой процент получает лечение '
   'каждого из указанных ниже видов в рамках одинаковых курсов/циклов лечения?',
-  name='Q7', comment='Укажите процент от 0 до 100 в каждой строке. Сумма не обязательно равна 100%.',
+  name='Q7', comment='Укажите процент от 0 до 100 в каждой строке. Сумма не обязательно равна 100%. '
+                     'Строку «Прочие комбинации» заполните, только если они есть.',
   RowList=alist('Q7 комбинации', {
       1: 'Объем и лифтинг с ГК + Ботулотоксин',
       2: 'Объем и лифтинг с ГК + Увлажнение кожи с ГК',
       3: 'Увлажнение кожи с ГК + Биостимуляторы без ГК',
       4: 'Объем и лифтинг с ГК + Биостимуляторы без ГК',
       96: 'Прочие мультимодальные комбинации (пожалуйста, укажите)'},
-      {96: {'OpenValueTxt': True, 'AllowEmptyOpenValue': True}}),
+      {96: {'OpenValueTxt': True, 'AllowEmptyOpenValue': True, 'CustomRowValidation': True}}),
   AnswerNumberFrom=0, AnswerNumberTo=100, after='return requireRowText(Q, 96);')
 
 # ----------------------------------------------------------------------------
@@ -403,8 +409,17 @@ for (let code of [1, 2, 3]) Q[code].checked = catActive(code);
 return Q.isAnswered ? answered : skip;
 ''')
 
-SEC2_HEAD = ('<p><b>Раздел 2. Знание и восприятие марки</b></p>'
-             '<p>Категория: <b>{answerText}</b></p>')
+q(8001, 'Information',
+  '<p><b>Раздел 2. Знание и восприятие марки</b></p>'
+  '<p>В следующем разделе мы хотели бы сосредоточиться на том, как вы используете марки инъекционных '
+  'продуктов в рамках следующих категорий:</p>{Категории}'
+  '<p>Просим вас дать ответы на следующие вопросы на основании ваших текущих практик назначения и '
+  'лечения.</p>', name='INFO2', before='''
+let items = Q8000.getChecked().map(function (a) { return '<li>' + a.text + '</li>'; });
+V['Категории'] = '<ul>' + items.join('') + '</ul>';
+''')
+
+SEC2_HEAD = '<p>Категория: <b>{answerText}</b></p>'
 
 q(80, 'Table_Text',
   SEC2_HEAD + '<p>Если рассматривать эту категорию, какие марки <b>первыми приходят в голову</b>? '
@@ -453,32 +468,32 @@ if (q9.isChecked(96)) Q.rows[96].text = 'Другое: ' + (q9[96].openValueTxt 
 return Q.rows.hasVisible ? ok : skip;
 ''')
 
-q(110, 'Table_Text',
-  SEC2_HEAD + '<p>По какой причине вы оценили марку на уровне 0–6?</p>',
-  name='Q11_{3}', comment='Опишите причину своими словами', RowList='Марки строки',
-  before='''
-let q10 = Q.currentIterationQuestions[100];
-showRowsWhere(Q, function (code) { return isNpsFollowUp(q10, code, Q.sourceAnswerCode); });
-return Q.rows.hasVisible ? ok : skip;
+# Q11-Q12 — цикл простых вопросов по маркам с оценкой 0-6 (после цикла по категориям)
+q(8500, 'MultipleChoice', 'СЛУЖЕБНЫЙ: марки для уточняющих вопросов Q11-Q12 (оценка 0-6)',
+  name='NPSLOOP', AnswerList=alist('Марки (цикл Q11-Q12)', ALL_BRANDS), before='''
+Q.reset();
+for (let cat of [1, 2, 3]) {
+    if (!((1000 + cat) in questions)) continue;
+    let q10 = questions[1000 + cat];
+    for (let code of npsFollowUpBrands(cat)) {
+        if (isNpsFollowUp(q10, code, cat)) Q[code].checked = true;
+    }
+}
+return Q.isAnswered ? answered : skip;
 ''')
 
-q(120, 'Table_MultipleChoice',
-  SEC2_HEAD + '<p>Что могло бы увеличить вероятность рекомендации марки в будущем?</p>',
-  name='Q12_{3}', comment='Выберите не более 3 вариантов в каждой строке', RowList='Марки строки',
-  AnswerList=alist('Q12 факторы', IMPROVE), MinAnswerCount=1, MaxAnswerCount=3,
-  before='''
-let q10 = Q.currentIterationQuestions[100];
-showRowsWhere(Q, function (code) { return isNpsFollowUp(q10, code, Q.sourceAnswerCode); });
-return Q.rows.hasVisible ? ok : skip;
+q(110, 'Text',
+  '<p>Вы оценили вероятность рекомендации марки <b>«{answerText}»</b> на {Оценка} из 10.</p>'
+  '<p>По какой причине вы оценили эту марку на уровне 0–6?</p>',
+  name='Q11_{3}', comment='Опишите причину своими словами', TextLineCount=3, before='''
+let cat = brandCat(Q.sourceAnswerCode);
+V['Оценка'] = questions[1000 + cat].rows[Q.sourceAnswerCode].getCheckedCode(true);
 ''')
 
-q(125, 'Table_Text',
-  SEC2_HEAD + '<p>Уточните, пожалуйста, что ещё могло бы увеличить вероятность рекомендации марки?</p>',
-  name='Q12o_{3}', RowList='Марки строки', before='''
-let q12 = Q.currentIterationQuestions[120];
-showRowsWhere(Q, function (code) { return q12.rows[code].visible && q12.rows[code].isChecked(96); });
-return Q.rows.hasVisible ? ok : skip;
-''')
+q(120, 'MultipleChoice',
+  'Что могло бы увеличить вероятность рекомендации марки <b>«{answerText}»</b> в будущем?',
+  name='Q12_{3}', comment='Выберите не более 3 вариантов',
+  AnswerList=alist('Q12 факторы', IMPROVE, {96: OTHER_TXT}), MaxAnswerCount=3)
 
 # ----------------------------------------------------------------------------
 # Раздел 3: использование марки/SKU — по блоку на категорию
@@ -583,7 +598,8 @@ filterDropdown(Q, known);
 cat_brands_js = ', '.join(f'{c}: {sorted(BRANDS[c])}' for c in BRANDS)
 aliases_js = ',\n        '.join(f'{code}: {json.dumps(a, ensure_ascii=False)}'
                                 for code, a in BRAND_ALIASES.items())
-followup_js = ', '.join(f'{c}: {v}' for c, v in NPS_FOLLOWUP.items())
+followup = {c: sorted(BRANDS[c]) for c in BRANDS} if NPS_FOLLOWUP_ALL else NPS_FOLLOWUP
+followup_js = ', '.join(f'{c}: {v}' for c, v in followup.items())
 
 qnr.global_functions = f'''
 // Коды марок по категориям (1 - объем и лифтинг, 2 - увлажнение, 3 - биостимуляторы)
@@ -614,6 +630,14 @@ function knownBrands(cat, shareQ) {{
     return result;
 }}
 
+// Категория, к которой относится марка
+function brandCat(code) {{
+    for (let cat of [1, 2, 3]) {{
+        if (catBrands(cat).indexOf(code) > -1) return cat;
+    }}
+    return 0;
+}}
+
 // Марка оценена на 0-6 и входит в список для уточняющих вопросов
 function isNpsFollowUp(q10, code, cat) {{
     if (npsFollowUpBrands(cat).indexOf(code) === -1) return false;
@@ -636,9 +660,11 @@ qnr.preprocessing = '''
 // Раздел 2: одинаковый случайный порядок марок в Q9 и Q10 (96/97 - на месте)
 Q90.answers.randomize();
 Q100.rows.setOrder(Q90.answers.getCodes().filter(function (code) { return code !== 97; }));
-// Категории - в случайном порядке, затем цикл Q8-Q12 по категориям с S3 > 0
+// Категории - в случайном порядке, затем цикл Q8-Q10 по категориям с S3 > 0
 Q8000.answers.randomize();
-questions.repeat(80, 125, 8000);
+questions.repeat(80, 100, 8000);
+// Q11-Q12 по маркам с оценкой 0-6
+questions.repeat(110, 120, 8500);
 
 // Раздел 3: один и тот же случайный порядок марок во всех вопросах блока
 for (let base of [130, 210, 290]) {

@@ -9,8 +9,8 @@
     "HideQuestionNumbers": true,
     "HideAnswerCodes": true
   },
-  "ScriptGlobalFunctions": "// ============================================================================\n// Общая библиотека функций для анкет SURVEYSTUDIO\n// Вставляется в раздел «Функции» анкеты генератором (tools/ss_builder.py).\n// Тексты \"Благодарим вас за уделенное время! К сожалению, по условиям исследования вы не можете принять в нем участие.\" и \"Благодарим вас за уделенное время! До свидания.\" подставляются при сборке.\n// ============================================================================\n\n// Скринаут с результатом «Скрининг» (не подходит по критериям отбора).\n// Использование в скрипте после ответа: if (Q.isChecked(3)) return screenOut();\nfunction screenOut() {\n    return exitWithResult(InterviewResult.Screening, \"Благодарим вас за уделенное время! К сожалению, по условиям исследования вы не можете принять в нем участие.\");\n}\n\n// Отказ от участия с результатом «Завершено».\nfunction refuseOut() {\n    return exitWithResult(InterviewResult.Exited, \"Благодарим вас за уделенное время! До свидания.\");\n}\n\n// Число в строке табличного числового вопроса (0, если строка скрыта или пуста).\nfunction numRow(q, code) {\n    let row = q.rows[code];\n    if (row === undefined || !row.visible) return 0;\n    let v = row.answer.openValueNum;\n    return v === undefined ? 0 : v;\n}\n\n// Сумма чисел во всех видимых строках табличного числового вопроса.\nfunction sumRows(q) {\n    let total = 0;\n    for (let code of q.rows.getCodes()) total += numRow(q, code);\n    return total;\n}\n\n// Показать только строки, для кодов которых predicate(code) вернул true.\n// Пример: showRowsWhere(Q, function (code) { return numRow(Q10, code) > 0; });\nfunction showRowsWhere(q, predicate) {\n    q.rows.hideAll();\n    for (let code of q.rows.getCodes()) {\n        if (predicate(code)) q.rows.show(code);\n    }\n}\n\n// Показать только варианты ответа, для кодов которых predicate(code) вернул true.\nfunction showAnswersWhere(q, predicate) {\n    q.answers.hideAll();\n    for (let code of q.answers.getCodes()) {\n        if (predicate(code)) q.answers.show(code);\n    }\n}\n\n// Если в строке «Другое» таблицы указано число > 0, требовать уточнение текста.\n// Использование в скрипте после ответа: return requireRowText(Q, 98);\nfunction requireRowText(q, code) {\n    let row = q.rows[code];\n    if (row === undefined || !row.visible) return ok;\n    let v = row.answer.openValueNum;\n    if (v !== undefined && v > 0 && !row.openValueTxt) {\n        return error('Пожалуйста, уточните вариант «' + row.plainText + '»');\n    }\n    return ok;\n}\n\n// Подставить текст «Другое» из строки вопроса src в текст строки вопроса dst.\nfunction copyOtherText(src, dst, code) {\n    if (dst.rows[code] === undefined || src.rows[code] === undefined) return;\n    let txt = src.rows[code].openValueTxt;\n    dst.rows[code].text = txt ? 'Другое: ' + txt : 'Другое';\n}\n\n// Текст выбранных ответов через запятую (для «другого» — вписанный текст).\nfunction checkedText(q) {\n    let parts = [];\n    for (let a of q.getChecked()) {\n        parts.push(a.settings.openValueTxt && a.openValueTxt ? a.openValueTxt : a.plainText);\n    }\n    return parts.join(', ');\n}\n\n// Оставить в выпадающих списках таблицы только указанные коды. ⚠️ не проверено в системе.\n// Колонкам таблицы давать код 900: если объект answers содержит его, значит это колонки,\n// а не выпадающий список, и фильтровать его нельзя.\nfunction filterDropdown(q, codes) {\n    if (codes.length === 0) return;\n    let isDropdownList = function (list) {\n        return list !== undefined && list.getCodes().indexOf(900) === -1 && list.count > 1;\n    };\n    try {\n        if (isDropdownList(q.answers)) { q.answers.showOnly(codes); return; }\n    } catch (e) { }\n    for (let row of q.rows.getAll()) {\n        try {\n            if (isDropdownList(row.answers)) row.answers.showOnly(codes);\n        } catch (e) { }\n    }\n}\n\n// Найти в тексте упоминания по словарю синонимов { код: ['вариант1', 'вариант2'] }.\n// Регистр, пробелы и знаки препинания не учитываются. Возвращает массив кодов.\nfunction findByAliases(text, aliases, codes) {\n    let norm = String(text).toLowerCase().replace(/ё/g, 'е').replace(/[^a-zа-я0-9]/g, '');\n    let found = [];\n    for (let code of codes) {\n        let list = aliases[code] || [];\n        for (let a of list) {\n            if (norm.indexOf(a) > -1) { found.push(code); break; }\n        }\n    }\n    return found;\n}\n\n// ===== Функции этой анкеты =====\n\n// Коды марок по категориям (1 - объем и лифтинг, 2 - увлажнение, 3 - биостимуляторы)\nfunction catBrands(cat) {\n    let map = {1: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18], 2: [21, 22, 23, 24, 25, 26, 27, 28, 29], 3: [31, 32, 33, 34, 35, 36, 37]};\n    return map[cat] || [];\n}\n\n// Марки, по которым задаются Q11-Q12 при оценке 0-6 (Ювидерм + марки заказчика)\nfunction npsFollowUpBrands(cat) {\n    let map = {1: [2], 2: [], 3: []};\n    return map[cat] || [];\n}\n\n// Врач проводит процедуры категории (S3 > 0)\nfunction catActive(cat) {\n    return numRow(Q5003, cat) > 0;\n}\n\n// Известные врачу марки категории: отмеченные в Q9 (раздел 2) и используемые в разделе 3\nfunction knownBrands(cat, shareQ) {\n    let result = [];\n    let q9 = (900 + cat) in questions ? questions[900 + cat] : undefined;\n    for (let code of catBrands(cat).concat([98])) {\n        let aware = q9 !== undefined && code !== 98 && q9.isChecked(code);\n        if (aware || numRow(shareQ, code) > 0) result.push(code);\n    }\n    return result;\n}\n\n// Марка оценена на 0-6 и входит в список для уточняющих вопросов\nfunction isNpsFollowUp(q10, code, cat) {\n    if (npsFollowUpBrands(cat).indexOf(code) === -1) return false;\n    let row = q10.rows[code];\n    if (row === undefined || !row.visible) return false;\n    let score = row.getCheckedCode(true);\n    return score !== undefined && score >= 0 && score <= 6;\n}\n\n// Найти марки категории, упомянутые в тексте (для автоотметки в Q9)\nfunction findBrands(text, codes) {\n    let aliases = {\n        1: [\"белотеро\", \"belotero\"],\n        2: [\"ювидерм\", \"juvederm\"],\n        3: [\"рестилайн\", \"restylane\"],\n        4: [\"теосиаль\", \"teosyal\"],\n        5: [\"стилаж\", \"stylage\"],\n        6: [\"ивор\", \"ivor\"],\n        7: [\"нейрамис\", \"neuramis\"],\n        8: [\"редженесс\", \"регенесс\", \"regenesse\"],\n        9: [\"принцесс\", \"princess\"],\n        10: [\"перфекта\", \"perfectha\"],\n        11: [\"реванесс\", \"revanesse\"],\n        12: [\"сардиния\", \"sardenya\"],\n        13: [\"хиафилия\", \"hyafilia\"],\n        14: [\"артфиллер\", \"artfiller\"],\n        15: [\"амалайн\", \"amalain\"],\n        16: [\"ревофил\", \"revofil\"],\n        17: [\"реви\", \"revi\"],\n        18: [\"тесоро\", \"tesoro\"],\n        21: [\"профайло\", \"profhilo\"],\n        22: [\"филлмед\", \"филмед\", \"fillmed\"],\n        23: [\"джалупро\", \"jalupro\"],\n        24: [\"иалсистем\", \"ialsystem\"],\n        25: [\"гиалуаль\", \"hyalual\"],\n        26: [\"новакутан\", \"novacutan\"],\n        27: [\"скинбустер\", \"skinbooster\"],\n        28: [\"ньювиа\", \"neauvia\"],\n        29: [\"плинест\", \"plinest\"],\n        31: [\"радиесс\", \"radiesse\"],\n        32: [\"скульптра\", \"sculptra\"],\n        33: [\"эстефил\", \"aesthefill\"],\n        34: [\"ювилук\", \"juvelook\"],\n        35: [\"коллост\", \"collost\"],\n        36: [\"сферогель\", \"spherogel\"],\n        37: [\"ренессанс\", \"renaissance\"]\n    };\n    return findByAliases(text, aliases, codes);\n}",
-  "ScriptPreProcessing": "// Раздел 2: одинаковый случайный порядок марок в Q9 и Q10 (96/97 - на месте)\nQ90.answers.randomize();\nQ100.rows.setOrder(Q90.answers.getCodes().filter(function (code) { return code !== 97; }));\n// Категории - в случайном порядке, затем цикл Q8-Q12 по категориям с S3 > 0\nQ8000.answers.randomize();\nquestions.repeat(80, 125, 8000);\n\n// Раздел 3: один и тот же случайный порядок марок во всех вопросах блока\nfor (let base of [130, 210, 290]) {\n    let shares = questions[base];\n    shares.rows.randomize();\n    let order = shares.rows.getCodes();\n    questions[base + 10].rows.setOrder(order);\n    try { questions[base + 30].answers.setOrder(order); } catch (e) { }\n    try { questions[base + 40].answers.setOrder(order); } catch (e) { }\n}",
+  "ScriptGlobalFunctions": "// ============================================================================\n// Общая библиотека функций для анкет SURVEYSTUDIO\n// Вставляется в раздел «Функции» анкеты генератором (tools/ss_builder.py).\n// Тексты \"Благодарим вас за уделенное время! К сожалению, по условиям исследования вы не можете принять в нем участие.\" и \"Благодарим вас за уделенное время! До свидания.\" подставляются при сборке.\n// ============================================================================\n\n// Скринаут с результатом «Скрининг» (не подходит по критериям отбора).\n// Использование в скрипте после ответа: if (Q.isChecked(3)) return screenOut();\nfunction screenOut() {\n    return exitWithResult(InterviewResult.Screening, \"Благодарим вас за уделенное время! К сожалению, по условиям исследования вы не можете принять в нем участие.\");\n}\n\n// Отказ от участия с результатом «Завершено».\nfunction refuseOut() {\n    return exitWithResult(InterviewResult.Exited, \"Благодарим вас за уделенное время! До свидания.\");\n}\n\n// Число в строке табличного числового вопроса (0, если строка скрыта или пуста).\nfunction numRow(q, code) {\n    let row = q.rows[code];\n    if (row === undefined || !row.visible) return 0;\n    let v = row.answer.openValueNum;\n    return v === undefined ? 0 : v;\n}\n\n// Сумма чисел во всех видимых строках табличного числового вопроса.\nfunction sumRows(q) {\n    let total = 0;\n    for (let code of q.rows.getCodes()) total += numRow(q, code);\n    return total;\n}\n\n// Показать только строки, для кодов которых predicate(code) вернул true.\n// Пример: showRowsWhere(Q, function (code) { return numRow(Q10, code) > 0; });\nfunction showRowsWhere(q, predicate) {\n    q.rows.hideAll();\n    for (let code of q.rows.getCodes()) {\n        if (predicate(code)) q.rows.show(code);\n    }\n}\n\n// Показать только варианты ответа, для кодов которых predicate(code) вернул true.\nfunction showAnswersWhere(q, predicate) {\n    q.answers.hideAll();\n    for (let code of q.answers.getCodes()) {\n        if (predicate(code)) q.answers.show(code);\n    }\n}\n\n// Строка «Другое» числовой таблицы: если указано число > 0 — требовать уточнение текста,\n// если вписан текст — требовать число. Строку можно сделать необязательной флагом CustomRowValidation.\n// Использование в скрипте после ответа: return requireRowText(Q, 98);\nfunction requireRowText(q, code) {\n    let row = q.rows[code];\n    if (row === undefined || !row.visible) return ok;\n    let v = row.answer.openValueNum;\n    if (v !== undefined && v > 0 && !row.openValueTxt) {\n        return error('Пожалуйста, уточните вариант «' + row.plainText + '»');\n    }\n    if (row.openValueTxt && v === undefined) {\n        return error('Пожалуйста, укажите значение для варианта «' + row.plainText + '»');\n    }\n    return ok;\n}\n\n// Подставить текст «Другое» из строки вопроса src в текст строки вопроса dst.\nfunction copyOtherText(src, dst, code) {\n    if (dst.rows[code] === undefined || src.rows[code] === undefined) return;\n    let txt = src.rows[code].openValueTxt;\n    dst.rows[code].text = txt ? 'Другое: ' + txt : 'Другое';\n}\n\n// Текст выбранных ответов через запятую (для «другого» — вписанный текст).\nfunction checkedText(q) {\n    let parts = [];\n    for (let a of q.getChecked()) {\n        parts.push(a.settings.openValueTxt && a.openValueTxt ? a.openValueTxt : a.plainText);\n    }\n    return parts.join(', ');\n}\n\n// Оставить в выпадающих списках таблицы только указанные коды. ⚠️ не проверено в системе.\n// Колонкам таблицы давать код 900: если объект answers содержит его, значит это колонки,\n// а не выпадающий список, и фильтровать его нельзя.\nfunction filterDropdown(q, codes) {\n    if (codes.length === 0) return;\n    let isDropdownList = function (list) {\n        return list !== undefined && list.getCodes().indexOf(900) === -1 && list.count > 1;\n    };\n    try {\n        if (isDropdownList(q.answers)) { q.answers.showOnly(codes); return; }\n    } catch (e) { }\n    for (let row of q.rows.getAll()) {\n        try {\n            if (isDropdownList(row.answers)) row.answers.showOnly(codes);\n        } catch (e) { }\n    }\n}\n\n// Найти в тексте упоминания по словарю синонимов { код: ['вариант1', 'вариант2'] }.\n// Регистр, пробелы и знаки препинания не учитываются. Возвращает массив кодов.\nfunction findByAliases(text, aliases, codes) {\n    let norm = String(text).toLowerCase().replace(/ё/g, 'е').replace(/[^a-zа-я0-9]/g, '');\n    let found = [];\n    for (let code of codes) {\n        let list = aliases[code] || [];\n        for (let a of list) {\n            if (norm.indexOf(a) > -1) { found.push(code); break; }\n        }\n    }\n    return found;\n}\n\n// ===== Функции этой анкеты =====\n\n// Коды марок по категориям (1 - объем и лифтинг, 2 - увлажнение, 3 - биостимуляторы)\nfunction catBrands(cat) {\n    let map = {1: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18], 2: [21, 22, 23, 24, 25, 26, 27, 28, 29], 3: [31, 32, 33, 34, 35, 36, 37]};\n    return map[cat] || [];\n}\n\n// Марки, по которым задаются Q11-Q12 при оценке 0-6 (Ювидерм + марки заказчика)\nfunction npsFollowUpBrands(cat) {\n    let map = {1: [2], 2: [], 3: []};\n    return map[cat] || [];\n}\n\n// Врач проводит процедуры категории (S3 > 0)\nfunction catActive(cat) {\n    return numRow(Q5003, cat) > 0;\n}\n\n// Известные врачу марки категории: отмеченные в Q9 (раздел 2) и используемые в разделе 3\nfunction knownBrands(cat, shareQ) {\n    let result = [];\n    let q9 = (900 + cat) in questions ? questions[900 + cat] : undefined;\n    for (let code of catBrands(cat).concat([98])) {\n        let aware = q9 !== undefined && code !== 98 && q9.isChecked(code);\n        if (aware || numRow(shareQ, code) > 0) result.push(code);\n    }\n    return result;\n}\n\n// Категория, к которой относится марка\nfunction brandCat(code) {\n    for (let cat of [1, 2, 3]) {\n        if (catBrands(cat).indexOf(code) > -1) return cat;\n    }\n    return 0;\n}\n\n// Марка оценена на 0-6 и входит в список для уточняющих вопросов\nfunction isNpsFollowUp(q10, code, cat) {\n    if (npsFollowUpBrands(cat).indexOf(code) === -1) return false;\n    let row = q10.rows[code];\n    if (row === undefined || !row.visible) return false;\n    let score = row.getCheckedCode(true);\n    return score !== undefined && score >= 0 && score <= 6;\n}\n\n// Найти марки категории, упомянутые в тексте (для автоотметки в Q9)\nfunction findBrands(text, codes) {\n    let aliases = {\n        1: [\"белотеро\", \"belotero\"],\n        2: [\"ювидерм\", \"juvederm\"],\n        3: [\"рестилайн\", \"restylane\"],\n        4: [\"теосиаль\", \"teosyal\"],\n        5: [\"стилаж\", \"stylage\"],\n        6: [\"ивор\", \"ivor\"],\n        7: [\"нейрамис\", \"neuramis\"],\n        8: [\"редженесс\", \"регенесс\", \"regenesse\"],\n        9: [\"принцесс\", \"princess\"],\n        10: [\"перфекта\", \"perfectha\"],\n        11: [\"реванесс\", \"revanesse\"],\n        12: [\"сардиния\", \"sardenya\"],\n        13: [\"хиафилия\", \"hyafilia\"],\n        14: [\"артфиллер\", \"artfiller\"],\n        15: [\"амалайн\", \"amalain\"],\n        16: [\"ревофил\", \"revofil\"],\n        17: [\"реви\", \"revi\"],\n        18: [\"тесоро\", \"tesoro\"],\n        21: [\"профайло\", \"profhilo\"],\n        22: [\"филлмед\", \"филмед\", \"fillmed\"],\n        23: [\"джалупро\", \"jalupro\"],\n        24: [\"иалсистем\", \"ialsystem\"],\n        25: [\"гиалуаль\", \"hyalual\"],\n        26: [\"новакутан\", \"novacutan\"],\n        27: [\"скинбустер\", \"skinbooster\"],\n        28: [\"ньювиа\", \"neauvia\"],\n        29: [\"плинест\", \"plinest\"],\n        31: [\"радиесс\", \"radiesse\"],\n        32: [\"скульптра\", \"sculptra\"],\n        33: [\"эстефил\", \"aesthefill\"],\n        34: [\"ювилук\", \"juvelook\"],\n        35: [\"коллост\", \"collost\"],\n        36: [\"сферогель\", \"spherogel\"],\n        37: [\"ренессанс\", \"renaissance\"]\n    };\n    return findByAliases(text, aliases, codes);\n}",
+  "ScriptPreProcessing": "// Раздел 2: одинаковый случайный порядок марок в Q9 и Q10 (96/97 - на месте)\nQ90.answers.randomize();\nQ100.rows.setOrder(Q90.answers.getCodes().filter(function (code) { return code !== 97; }));\n// Категории - в случайном порядке, затем цикл Q8-Q10 по категориям с S3 > 0\nQ8000.answers.randomize();\nquestions.repeat(80, 100, 8000);\n// Q11-Q12 по маркам с оценкой 0-6\nquestions.repeat(110, 120, 8500);\n\n// Раздел 3: один и тот же случайный порядок марок во всех вопросах блока\nfor (let base of [130, 210, 290]) {\n    let shares = questions[base];\n    shares.rows.randomize();\n    let order = shares.rows.getCodes();\n    questions[base + 10].rows.setOrder(order);\n    try { questions[base + 30].answers.setOrder(order); } catch (e) { }\n    try { questions[base + 40].answers.setOrder(order); } catch (e) { }\n}",
   "Questions": [
     {
       "OrderIdx": 1,
@@ -249,7 +249,7 @@
       "ScriptBeforeShow": "showRowsWhere(Q, function (code) { return catActive(code); });\nreturn Q.rows.hasVisible ? ok : skip;",
       "RowList": "Категории 3",
       "AnswerNumberFrom": 0,
-      "AnswerNumberTo": 100
+      "AnswerNumberTo": 9999
     },
     {
       "OrderIdx": 22,
@@ -265,7 +265,7 @@
       "ScriptBeforeShow": "showRowsWhere(Q, function (code) { return catActive(code); });\nreturn Q.rows.hasVisible ? ok : skip;",
       "RowList": "Категории 3 (необязательные)",
       "AnswerNumberFrom": 0,
-      "AnswerNumberTo": 100
+      "AnswerNumberTo": 9999
     },
     {
       "OrderIdx": 23,
@@ -350,7 +350,7 @@
       "ExportedQuestionFlags": {},
       "ExportedSurveyFlags": {},
       "OutputColumnTemplate": "Q7",
-      "Comment": "Укажите процент от 0 до 100 в каждой строке. Сумма не обязательно равна 100%.",
+      "Comment": "Укажите процент от 0 до 100 в каждой строке. Сумма не обязательно равна 100%. Строку «Прочие комбинации» заполните, только если они есть.",
       "ScriptAfterAnswer": "return requireRowText(Q, 96);",
       "RowList": "Q7 комбинации",
       "AnswerNumberFrom": 0,
@@ -369,8 +369,18 @@
     },
     {
       "OrderIdx": 31,
+      "Number": 8001,
+      "Text": "<p><b>Раздел 2. Знание и восприятие марки</b></p><p>В следующем разделе мы хотели бы сосредоточиться на том, как вы используете марки инъекционных продуктов в рамках следующих категорий:</p>{Категории}<p>Просим вас дать ответы на следующие вопросы на основании ваших текущих практик назначения и лечения.</p>",
+      "QuestionType": "Information",
+      "ExportedQuestionFlags": {},
+      "ExportedSurveyFlags": {},
+      "OutputColumnTemplate": "INFO2",
+      "ScriptBeforeShow": "let items = Q8000.getChecked().map(function (a) { return '<li>' + a.text + '</li>'; });\nV['Категории'] = '<ul>' + items.join('') + '</ul>';"
+    },
+    {
+      "OrderIdx": 32,
       "Number": 80,
-      "Text": "<p><b>Раздел 2. Знание и восприятие марки</b></p><p>Категория: <b>{answerText}</b></p><p>Если рассматривать эту категорию, какие марки <b>первыми приходят в голову</b>? Пожалуйста, укажите до пяти марок.</p>",
+      "Text": "<p>Категория: <b>{answerText}</b></p><p>Если рассматривать эту категорию, какие марки <b>первыми приходят в голову</b>? Пожалуйста, укажите до пяти марок.</p>",
       "QuestionType": "Table_Text",
       "ExportedQuestionFlags": {},
       "ExportedSurveyFlags": {},
@@ -379,9 +389,9 @@
       "RowList": "Упоминания"
     },
     {
-      "OrderIdx": 32,
+      "OrderIdx": 33,
       "Number": 90,
-      "Text": "<p><b>Раздел 2. Знание и восприятие марки</b></p><p>Категория: <b>{answerText}</b></p><p>Какие из указанных ниже марок вам известны в данной категории, даже если вы лично их никогда не использовали?</p>",
+      "Text": "<p>Категория: <b>{answerText}</b></p><p>Какие из указанных ниже марок вам известны в данной категории, даже если вы лично их никогда не использовали?</p>",
       "QuestionType": "MultipleChoice",
       "ExportedQuestionFlags": {},
       "ExportedSurveyFlags": {},
@@ -391,9 +401,9 @@
       "AnswerList": "Q9 марки"
     },
     {
-      "OrderIdx": 33,
+      "OrderIdx": 34,
       "Number": 100,
-      "Text": "<p><b>Раздел 2. Знание и восприятие марки</b></p><p>Категория: <b>{answerText}</b></p><p>С какой вероятностью вы порекомендуете каждую марку коллеге, выполняющему процедуры в этой категории?</p>",
+      "Text": "<p>Категория: <b>{answerText}</b></p><p>С какой вероятностью вы порекомендуете каждую марку коллеге, выполняющему процедуры в этой категории?</p>",
       "QuestionType": "Table_SingleChoice",
       "ExportedQuestionFlags": {},
       "ExportedSurveyFlags": {},
@@ -404,45 +414,42 @@
       "AnswerList": "NPS"
     },
     {
-      "OrderIdx": 34,
+      "OrderIdx": 35,
+      "Number": 8500,
+      "Text": "СЛУЖЕБНЫЙ: марки для уточняющих вопросов Q11-Q12 (оценка 0-6)",
+      "QuestionType": "MultipleChoice",
+      "ExportedQuestionFlags": {},
+      "ExportedSurveyFlags": {},
+      "OutputColumnTemplate": "NPSLOOP",
+      "ScriptBeforeShow": "Q.reset();\nfor (let cat of [1, 2, 3]) {\n    if (!((1000 + cat) in questions)) continue;\n    let q10 = questions[1000 + cat];\n    for (let code of npsFollowUpBrands(cat)) {\n        if (isNpsFollowUp(q10, code, cat)) Q[code].checked = true;\n    }\n}\nreturn Q.isAnswered ? answered : skip;",
+      "AnswerList": "Марки (цикл Q11-Q12)"
+    },
+    {
+      "OrderIdx": 36,
       "Number": 110,
-      "Text": "<p><b>Раздел 2. Знание и восприятие марки</b></p><p>Категория: <b>{answerText}</b></p><p>По какой причине вы оценили марку на уровне 0–6?</p>",
-      "QuestionType": "Table_Text",
+      "Text": "<p>Вы оценили вероятность рекомендации марки <b>«{answerText}»</b> на {Оценка} из 10.</p><p>По какой причине вы оценили эту марку на уровне 0–6?</p>",
+      "QuestionType": "Text",
       "ExportedQuestionFlags": {},
       "ExportedSurveyFlags": {},
       "OutputColumnTemplate": "Q11_{3}",
       "Comment": "Опишите причину своими словами",
-      "ScriptBeforeShow": "let q10 = Q.currentIterationQuestions[100];\nshowRowsWhere(Q, function (code) { return isNpsFollowUp(q10, code, Q.sourceAnswerCode); });\nreturn Q.rows.hasVisible ? ok : skip;",
-      "RowList": "Марки строки"
-    },
-    {
-      "OrderIdx": 35,
-      "Number": 120,
-      "Text": "<p><b>Раздел 2. Знание и восприятие марки</b></p><p>Категория: <b>{answerText}</b></p><p>Что могло бы увеличить вероятность рекомендации марки в будущем?</p>",
-      "QuestionType": "Table_MultipleChoice",
-      "ExportedQuestionFlags": {},
-      "ExportedSurveyFlags": {},
-      "OutputColumnTemplate": "Q12_{3}",
-      "Comment": "Выберите не более 3 вариантов в каждой строке",
-      "ScriptBeforeShow": "let q10 = Q.currentIterationQuestions[100];\nshowRowsWhere(Q, function (code) { return isNpsFollowUp(q10, code, Q.sourceAnswerCode); });\nreturn Q.rows.hasVisible ? ok : skip;",
-      "RowList": "Марки строки",
-      "AnswerList": "Q12 факторы",
-      "MinAnswerCount": 1,
-      "MaxAnswerCount": 3
-    },
-    {
-      "OrderIdx": 36,
-      "Number": 125,
-      "Text": "<p><b>Раздел 2. Знание и восприятие марки</b></p><p>Категория: <b>{answerText}</b></p><p>Уточните, пожалуйста, что ещё могло бы увеличить вероятность рекомендации марки?</p>",
-      "QuestionType": "Table_Text",
-      "ExportedQuestionFlags": {},
-      "ExportedSurveyFlags": {},
-      "OutputColumnTemplate": "Q12o_{3}",
-      "ScriptBeforeShow": "let q12 = Q.currentIterationQuestions[120];\nshowRowsWhere(Q, function (code) { return q12.rows[code].visible && q12.rows[code].isChecked(96); });\nreturn Q.rows.hasVisible ? ok : skip;",
-      "RowList": "Марки строки"
+      "ScriptBeforeShow": "let cat = brandCat(Q.sourceAnswerCode);\nV['Оценка'] = questions[1000 + cat].rows[Q.sourceAnswerCode].getCheckedCode(true);",
+      "TextLineCount": 3
     },
     {
       "OrderIdx": 37,
+      "Number": 120,
+      "Text": "Что могло бы увеличить вероятность рекомендации марки <b>«{answerText}»</b> в будущем?",
+      "QuestionType": "MultipleChoice",
+      "ExportedQuestionFlags": {},
+      "ExportedSurveyFlags": {},
+      "OutputColumnTemplate": "Q12_{3}",
+      "Comment": "Выберите не более 3 вариантов",
+      "AnswerList": "Q12 факторы",
+      "MaxAnswerCount": 3
+    },
+    {
+      "OrderIdx": 38,
       "Number": 130,
       "Text": "<p><b>Раздел 3. Использование марки</b></p><p>Из числа всех процедур с филлерами с ГК для объема и лифтинга / контуринга, которые вы выполняете в течение обычного месяца, укажите <b>разбивку в процентах по маркам</b>.</p>",
       "QuestionType": "Table_Numeric",
@@ -460,7 +467,7 @@
       "AnswersSumControlUnit": "Percent"
     },
     {
-      "OrderIdx": 38,
+      "OrderIdx": 39,
       "Number": 140,
       "Text": "Какой средний объем (мл) используется для каждого пациента в рамках сеанса лечения в отношении каждой из следующих марок?",
       "QuestionType": "Table_Numeric",
@@ -477,7 +484,7 @@
       "AnswerNumberTo": 20
     },
     {
-      "OrderIdx": 39,
+      "OrderIdx": 40,
       "Number": 150,
       "Text": "Если рассматривать все процедуры с филлерами с ГК для объема и лифтинга / контуринга, которые вы выполняете в течение обычного месяца, укажите <b>разбивку в процентах по областям инъекции</b>.",
       "QuestionType": "Table_Numeric",
@@ -495,7 +502,7 @@
       "AnswersSumControlUnit": "Percent"
     },
     {
-      "OrderIdx": 40,
+      "OrderIdx": 41,
       "Number": 160,
       "Text": "В отношении каждой области выберите <b>наиболее часто используемую марку</b>.",
       "QuestionType": "Table_Dropdown_SingleChoice",
@@ -509,7 +516,7 @@
       "AnswerList": "Марки кат.1 (выбор)"
     },
     {
-      "OrderIdx": 41,
+      "OrderIdx": 42,
       "Number": 170,
       "Text": "Если рассматривать все марки в этой категории, которые вам известны, какую марку вы считаете <b>наиболее подходящей</b> для каждого из указанных ниже пациентов или сценариев лечения?",
       "QuestionType": "Table_Dropdown_SingleChoice",
@@ -524,7 +531,7 @@
       "AnswerList": "Марки кат.1 (выбор) + не знаю"
     },
     {
-      "OrderIdx": 42,
+      "OrderIdx": 43,
       "Number": 180,
       "Text": "Каков типичный подход к ценообразованию на процедуры с филлерами с ГК для объема и лифтинга / контуринга в вашем месте работы?",
       "QuestionType": "SingleChoice",
@@ -536,7 +543,7 @@
       "AnswerList": "Ценообразование"
     },
     {
-      "OrderIdx": 43,
+      "OrderIdx": 44,
       "Number": 190,
       "Text": "Если рассматривать типичный сеанс лечения филлером с ГК для объема и лифтинга / контуринга, какая оплата в среднем взимается с пациента в вашем месте работы?",
       "QuestionType": "Numeric",
@@ -549,7 +556,7 @@
       "AnswerNumberTo": 10000000
     },
     {
-      "OrderIdx": 44,
+      "OrderIdx": 45,
       "Number": 200,
       "Text": "Какая оплата в среднем взимается с пациента <b>за 1 мл</b> продукта в вашем месте работы?",
       "QuestionType": "Numeric",
@@ -562,7 +569,7 @@
       "AnswerNumberTo": 10000000
     },
     {
-      "OrderIdx": 45,
+      "OrderIdx": 46,
       "Number": 210,
       "Text": "<p><b>Раздел 3. Использование марки</b></p><p>Из числа всех процедур с филлерами с ГК для увлажнения кожи, которые вы выполняете в течение обычного месяца, укажите <b>разбивку в процентах по маркам</b>.</p>",
       "QuestionType": "Table_Numeric",
@@ -580,7 +587,7 @@
       "AnswersSumControlUnit": "Percent"
     },
     {
-      "OrderIdx": 46,
+      "OrderIdx": 47,
       "Number": 220,
       "Text": "Какой средний объем (мл) используется для каждого пациента в рамках сеанса лечения в отношении каждой из следующих марок?",
       "QuestionType": "Table_Numeric",
@@ -597,7 +604,7 @@
       "AnswerNumberTo": 20
     },
     {
-      "OrderIdx": 47,
+      "OrderIdx": 48,
       "Number": 230,
       "Text": "Если рассматривать все процедуры с филлерами с ГК для увлажнения кожи, которые вы выполняете в течение обычного месяца, укажите <b>разбивку в процентах по областям инъекции</b>.",
       "QuestionType": "Table_Numeric",
@@ -615,7 +622,7 @@
       "AnswersSumControlUnit": "Percent"
     },
     {
-      "OrderIdx": 48,
+      "OrderIdx": 49,
       "Number": 240,
       "Text": "В отношении каждой области выберите <b>наиболее часто используемую марку</b>.",
       "QuestionType": "Table_Dropdown_SingleChoice",
@@ -629,7 +636,7 @@
       "AnswerList": "Марки кат.2 (выбор)"
     },
     {
-      "OrderIdx": 49,
+      "OrderIdx": 50,
       "Number": 250,
       "Text": "Если рассматривать все марки в этой категории, которые вам известны, какую марку вы считаете <b>наиболее подходящей</b> для каждого из указанных ниже пациентов или сценариев лечения?",
       "QuestionType": "Table_Dropdown_SingleChoice",
@@ -644,7 +651,7 @@
       "AnswerList": "Марки кат.2 (выбор) + не знаю"
     },
     {
-      "OrderIdx": 50,
+      "OrderIdx": 51,
       "Number": 260,
       "Text": "Каков типичный подход к ценообразованию на процедуры с филлерами с ГК для увлажнения кожи в вашем месте работы?",
       "QuestionType": "SingleChoice",
@@ -656,7 +663,7 @@
       "AnswerList": "Ценообразование"
     },
     {
-      "OrderIdx": 51,
+      "OrderIdx": 52,
       "Number": 270,
       "Text": "Если рассматривать типичный сеанс лечения филлером с ГК для увлажнения кожи, какая оплата в среднем взимается с пациента в вашем месте работы?",
       "QuestionType": "Numeric",
@@ -669,7 +676,7 @@
       "AnswerNumberTo": 10000000
     },
     {
-      "OrderIdx": 52,
+      "OrderIdx": 53,
       "Number": 280,
       "Text": "Какая оплата в среднем взимается с пациента <b>за 1 мл</b> продукта в вашем месте работы?",
       "QuestionType": "Numeric",
@@ -682,7 +689,7 @@
       "AnswerNumberTo": 10000000
     },
     {
-      "OrderIdx": 53,
+      "OrderIdx": 54,
       "Number": 290,
       "Text": "<p><b>Раздел 3. Использование марки</b></p><p>Из числа всех процедур с биостимуляторами (филлерами без ГК), которые вы выполняете в течение обычного месяца, укажите <b>разбивку в процентах по маркам</b>.</p>",
       "QuestionType": "Table_Numeric",
@@ -700,7 +707,7 @@
       "AnswersSumControlUnit": "Percent"
     },
     {
-      "OrderIdx": 54,
+      "OrderIdx": 55,
       "Number": 300,
       "Text": "Какой средний объем (мл) используется для каждого пациента в рамках сеанса лечения в отношении каждой из следующих марок?",
       "QuestionType": "Table_Numeric",
@@ -717,7 +724,7 @@
       "AnswerNumberTo": 20
     },
     {
-      "OrderIdx": 55,
+      "OrderIdx": 56,
       "Number": 310,
       "Text": "Если рассматривать все процедуры с биостимуляторами (филлерами без ГК), которые вы выполняете в течение обычного месяца, укажите <b>разбивку в процентах по областям инъекции</b>.",
       "QuestionType": "Table_Numeric",
@@ -735,7 +742,7 @@
       "AnswersSumControlUnit": "Percent"
     },
     {
-      "OrderIdx": 56,
+      "OrderIdx": 57,
       "Number": 320,
       "Text": "В отношении каждой области выберите <b>наиболее часто используемую марку</b>.",
       "QuestionType": "Table_Dropdown_SingleChoice",
@@ -749,7 +756,7 @@
       "AnswerList": "Марки кат.3 (выбор)"
     },
     {
-      "OrderIdx": 57,
+      "OrderIdx": 58,
       "Number": 330,
       "Text": "Если рассматривать все марки в этой категории, которые вам известны, какую марку вы считаете <b>наиболее подходящей</b> для каждого из указанных ниже пациентов или сценариев лечения?",
       "QuestionType": "Table_Dropdown_SingleChoice",
@@ -764,7 +771,7 @@
       "AnswerList": "Марки кат.3 (выбор) + не знаю"
     },
     {
-      "OrderIdx": 58,
+      "OrderIdx": 59,
       "Number": 340,
       "Text": "Каков типичный подход к ценообразованию на процедуры с биостимуляторами (филлерами без ГК) в вашем месте работы?",
       "QuestionType": "SingleChoice",
@@ -776,7 +783,7 @@
       "AnswerList": "Ценообразование"
     },
     {
-      "OrderIdx": 59,
+      "OrderIdx": 60,
       "Number": 350,
       "Text": "Если рассматривать типичный сеанс лечения биостимулятором (филлером без ГК), какая оплата в среднем взимается с пациента в вашем месте работы?",
       "QuestionType": "Numeric",
@@ -789,7 +796,7 @@
       "AnswerNumberTo": 10000000
     },
     {
-      "OrderIdx": 60,
+      "OrderIdx": 61,
       "Number": 360,
       "Text": "Какая оплата в среднем взимается с пациента <b>за 1 мл</b> продукта в вашем месте работы?",
       "QuestionType": "Numeric",
@@ -1335,7 +1342,8 @@
           "Text": "Прочие мультимодальные комбинации (пожалуйста, укажите)",
           "ExportedFlags": {
             "OpenValueTxt": true,
-            "AllowEmptyOpenValue": true
+            "AllowEmptyOpenValue": true,
+            "CustomRowValidation": true
           }
         }
       ]
@@ -1909,6 +1917,216 @@
       ]
     },
     {
+      "Name": "Марки (цикл Q11-Q12)",
+      "Type": "Common",
+      "AnswerItems": [
+        {
+          "OrderIdx": 1,
+          "Code": 1,
+          "Text": "Белотеро",
+          "ExportedFlags": {}
+        },
+        {
+          "OrderIdx": 2,
+          "Code": 2,
+          "Text": "Ювидерм",
+          "ExportedFlags": {}
+        },
+        {
+          "OrderIdx": 3,
+          "Code": 3,
+          "Text": "Рестилайн",
+          "ExportedFlags": {}
+        },
+        {
+          "OrderIdx": 4,
+          "Code": 4,
+          "Text": "Теосиаль",
+          "ExportedFlags": {}
+        },
+        {
+          "OrderIdx": 5,
+          "Code": 5,
+          "Text": "Стилаж",
+          "ExportedFlags": {}
+        },
+        {
+          "OrderIdx": 6,
+          "Code": 6,
+          "Text": "Ивор",
+          "ExportedFlags": {}
+        },
+        {
+          "OrderIdx": 7,
+          "Code": 7,
+          "Text": "Нейрамис",
+          "ExportedFlags": {}
+        },
+        {
+          "OrderIdx": 8,
+          "Code": 8,
+          "Text": "Редженесс",
+          "ExportedFlags": {}
+        },
+        {
+          "OrderIdx": 9,
+          "Code": 9,
+          "Text": "Принцесс",
+          "ExportedFlags": {}
+        },
+        {
+          "OrderIdx": 10,
+          "Code": 10,
+          "Text": "Перфекта",
+          "ExportedFlags": {}
+        },
+        {
+          "OrderIdx": 11,
+          "Code": 11,
+          "Text": "Реванесс",
+          "ExportedFlags": {}
+        },
+        {
+          "OrderIdx": 12,
+          "Code": 12,
+          "Text": "Сардиния",
+          "ExportedFlags": {}
+        },
+        {
+          "OrderIdx": 13,
+          "Code": 13,
+          "Text": "ХИАФИЛИЯ",
+          "ExportedFlags": {}
+        },
+        {
+          "OrderIdx": 14,
+          "Code": 14,
+          "Text": "Арт филлер",
+          "ExportedFlags": {}
+        },
+        {
+          "OrderIdx": 15,
+          "Code": 15,
+          "Text": "Амалайн",
+          "ExportedFlags": {}
+        },
+        {
+          "OrderIdx": 16,
+          "Code": 16,
+          "Text": "Ревофил",
+          "ExportedFlags": {}
+        },
+        {
+          "OrderIdx": 17,
+          "Code": 17,
+          "Text": "Реви",
+          "ExportedFlags": {}
+        },
+        {
+          "OrderIdx": 18,
+          "Code": 18,
+          "Text": "Тесоро",
+          "ExportedFlags": {}
+        },
+        {
+          "OrderIdx": 19,
+          "Code": 21,
+          "Text": "Профайло",
+          "ExportedFlags": {}
+        },
+        {
+          "OrderIdx": 20,
+          "Code": 22,
+          "Text": "Филлмед",
+          "ExportedFlags": {}
+        },
+        {
+          "OrderIdx": 21,
+          "Code": 23,
+          "Text": "Джалупро",
+          "ExportedFlags": {}
+        },
+        {
+          "OrderIdx": 22,
+          "Code": 24,
+          "Text": "ИАЛ-Систем",
+          "ExportedFlags": {}
+        },
+        {
+          "OrderIdx": 23,
+          "Code": 25,
+          "Text": "Гиалуаль",
+          "ExportedFlags": {}
+        },
+        {
+          "OrderIdx": 24,
+          "Code": 26,
+          "Text": "Новакутан",
+          "ExportedFlags": {}
+        },
+        {
+          "OrderIdx": 25,
+          "Code": 27,
+          "Text": "Рестилайн Скинбустер",
+          "ExportedFlags": {}
+        },
+        {
+          "OrderIdx": 26,
+          "Code": 28,
+          "Text": "Ньювиа Гидро",
+          "ExportedFlags": {}
+        },
+        {
+          "OrderIdx": 27,
+          "Code": 29,
+          "Text": "Плинест",
+          "ExportedFlags": {}
+        },
+        {
+          "OrderIdx": 28,
+          "Code": 31,
+          "Text": "Радиесс (CaHA)",
+          "ExportedFlags": {}
+        },
+        {
+          "OrderIdx": 29,
+          "Code": 32,
+          "Text": "Скульптра (PLLA)",
+          "ExportedFlags": {}
+        },
+        {
+          "OrderIdx": 30,
+          "Code": 33,
+          "Text": "Эстефил (PDLLA)",
+          "ExportedFlags": {}
+        },
+        {
+          "OrderIdx": 31,
+          "Code": 34,
+          "Text": "Ювилук (PDLLA + ГК)",
+          "ExportedFlags": {}
+        },
+        {
+          "OrderIdx": 32,
+          "Code": 35,
+          "Text": "Коллост (коллаген)",
+          "ExportedFlags": {}
+        },
+        {
+          "OrderIdx": 33,
+          "Code": 36,
+          "Text": "Сферогель (коллаген)",
+          "ExportedFlags": {}
+        },
+        {
+          "OrderIdx": 34,
+          "Code": 37,
+          "Text": "Ренессанс",
+          "ExportedFlags": {}
+        }
+      ]
+    },
+    {
       "Name": "Q12 факторы",
       "Type": "Common",
       "AnswerItems": [
@@ -1976,7 +2194,9 @@
           "OrderIdx": 11,
           "Code": 96,
           "Text": "Другое",
-          "ExportedFlags": {}
+          "ExportedFlags": {
+            "OpenValueTxt": true
+          }
         }
       ]
     },

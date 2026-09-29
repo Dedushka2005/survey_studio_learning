@@ -15,7 +15,7 @@ def scenario(cats, used, areas_used, aware, mentions, both_prices, nps_followup,
     """cats — активные категории; used/areas_used/aware/mentions — число на категорию."""
     k = len(cats)
     s = {
-        41: {'skip': True}, 8000: {'skip': True},            # служебные, не показываются
+        41: {'skip': True}, 8000: {'skip': True}, 8500: {'skip': True},  # служебные
         5003: {'number': 'simple'},
         5012: {'rows': 5, 'text': 'short'},
         5016: {'picks': 3},
@@ -28,12 +28,11 @@ def scenario(cats, used, areas_used, aware, mentions, both_prices, nps_followup,
     s[80] = {'rows': avg(mentions), 'repeat': k}
     s[90] = {'answers': avg(BRANDS) + 2, 'picks': avg(aware), 'repeat': k}
     s[100] = {'rows': avg(aware), 'repeat': k}
-    if nps_followup:   # Ювидерм оценён на 0-6 (только категория 1)
-        s[110] = {'rows': 1, 'text': 'long'}
-        s[120] = {'rows': 1, 'picks': 2}
+    if nps_followup:   # число марок с оценкой 0-6 из списка для уточнений
+        s[110] = {'text': 'long', 'repeat': nps_followup}
+        s[120] = {'picks': 2, 'repeat': nps_followup}
     else:
         s[110] = s[120] = {'skip': True}
-    s[125] = {'skip': True}
     for c in (1, 2, 3):
         b = BASES[c]
         if c not in cats:
@@ -54,26 +53,28 @@ def scenario(cats, used, areas_used, aware, mentions, both_prices, nps_followup,
 SCENARIOS = {
     'Минимум (1 категория, мало марок)': scenario(
         cats=[1], used={1: 2}, areas_used={1: 3}, aware={1: 4}, mentions={1: 2},
-        both_prices=False, nps_followup=False, q1b_rows=3),
+        both_prices=False, nps_followup=0, q1b_rows=3),
     'Типичный (3 категории)': scenario(
         cats=[1, 2, 3], used={1: 4, 2: 3, 3: 2}, areas_used={1: 6, 2: 5, 3: 4},
         aware={1: 8, 2: 5, 3: 4}, mentions={1: 3, 2: 3, 3: 2},
-        both_prices=False, nps_followup=False, q1b_rows=5),
+        both_prices=False, nps_followup=0, q1b_rows=5),
     'Максимум (3 категории, много марок)': scenario(
         cats=[1, 2, 3], used={1: 7, 2: 5, 3: 4}, areas_used={1: 9, 2: 9, 3: 8},
         aware={1: 14, 2: 8, 3: 6}, mentions={1: 5, 2: 5, 3: 5},
-        both_prices=True, nps_followup=True, q1b_rows=6),
+        both_prices=True, nps_followup=1, q1b_rows=6),
 }
 
-SECTIONS = [('Скринер и согласия', 5000, 5999), ('Раздел 1 (Q1–Q7)', 10, 79),
-            ('Раздел 2 (Q8–Q12)', 80, 125), ('Раздел 3 (Q13–Q36)', 130, 360)]
+SECTIONS = [('Скринер и согласия', lambda n: 5000 <= n <= 5999),
+            ('Раздел 1 (Q1–Q7)', lambda n: 10 <= n <= 79),
+            ('Раздел 2 (Q8–Q12)', lambda n: 80 <= n <= 120 or n == 8001),
+            ('Раздел 3 (Q13–Q36)', lambda n: 130 <= n <= 360)]
 
 if __name__ == '__main__':
     path = os.path.join(HERE, 'aesthetics_ru.json')
     for name, sc in SCENARIOS.items():
         total, rows = estimate(path, sc)
         parts = []
-        for title, lo, hi in SECTIONS:
-            sec = sum(r[4] for r in rows if lo <= r[0] <= hi)
+        for title, in_section in SECTIONS:
+            sec = sum(r[4] for r in rows if in_section(r[0]))
             parts.append(f'{title}: {sec / 60:.1f}')
         print(f'{name}: {total / 60:.0f} мин  ({"; ".join(parts)})')

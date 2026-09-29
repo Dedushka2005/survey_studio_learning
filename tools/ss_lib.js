@@ -47,7 +47,8 @@ function showAnswersWhere(q, predicate) {
     }
 }
 
-// Если в строке «Другое» таблицы указано число > 0, требовать уточнение текста.
+// Строка «Другое» числовой таблицы: если указано число > 0 — требовать уточнение текста,
+// если вписан текст — требовать число. Строку можно сделать необязательной флагом CustomRowValidation.
 // Использование в скрипте после ответа: return requireRowText(Q, 98);
 function requireRowText(q, code) {
     let row = q.rows[code];
@@ -55,6 +56,9 @@ function requireRowText(q, code) {
     let v = row.answer.openValueNum;
     if (v !== undefined && v > 0 && !row.openValueTxt) {
         return error('Пожалуйста, уточните вариант «' + row.plainText + '»');
+    }
+    if (row.openValueTxt && v === undefined) {
+        return error('Пожалуйста, укажите значение для варианта «' + row.plainText + '»');
     }
     return ok;
 }
