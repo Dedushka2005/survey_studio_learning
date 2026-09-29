@@ -187,7 +187,17 @@ AnswerNumberFrom, AnswerNumberTo, ScriptBeforeShow, ScriptAfterAnswer, BeforeSho
   ```
   В вопросе: `if (Q.isChecked(3) || Q.isChecked(4)) return screenOut();`
 - Анкета собирается генератором на Python (`surveys/<проект>/build.py` → JSON для импорта), а не вручную в редакторе.
-  Правки вносятся в генератор, затем файл пересобирается.
+  Правки вносятся в генератор, затем файл пересобирается. Новая анкета — копия `surveys/_template/`.
+- **Общая библиотека** (использовать во всех анкетах, пополнять удачными находками):
+  - `tools/ss_builder.py` — сборка: `Questionnaire(имя)`, `q(...)`, `alist(...)`, `screen_if([коды])`,
+    `refuse_if([коды])`, наборы флагов `OTHER_TXT`, `BLOCKING`, `FIXED`, `NO_LOOP`, `OPT_ROW`, `OTHER_ROW`.
+    `save()` проверяет уникальность номеров/имён/кодов, ссылки на списки и **синтаксис всех скриптов** (Node.js).
+  - `tools/ss_lib.js` — JS-функции, автоматически попадают в раздел «Функции» каждой анкеты:
+    `screenOut()`, `refuseOut()`, `numRow(q, code)`, `sumRows(q)`, `showRowsWhere(q, fn)`,
+    `showAnswersWhere(q, fn)`, `requireRowText(q, code)`, `copyOtherText(src, dst, code)`,
+    `checkedText(q)`, `filterDropdown(q, codes)` ⚠️, `findByAliases(text, aliases, codes)`.
+    Тексты скринаута/отказа задаются в `Questionnaire(screen_text=…, refuse_text=…)`.
+  - Функции конкретной анкеты — в `qnr.global_functions`, они добавляются после общих.
 - Скрипты в генераторе пишем так, чтобы их было легко читать в редакторе SURVEYSTUDIO (`Q.isChecked(...)`,
   а не хитрые конструкции).
 - Исходные файлы заказчика (docx с пометкой «конфиденциально») в репозиторий не коммитим.
@@ -211,9 +221,6 @@ AnswerNumberFrom, AnswerNumberTo, ScriptBeforeShow, ScriptAfterAnswer, BeforeSho
   в Подготовке `Q8000.answers.randomize(); questions.repeat(80, 125, 8000);`.
 - Чтобы номера вопросов цикла не пересекались с остальными, основные вопросы нумеруем «номер по ТЗ × 10»
   (Q13 → 130), скринер — 5000+, служебные — 8000+. Имя в массиве задаём шаблоном (`S1`, `Q13`, в цикле `Q8_{3}`).
-- Полезные глобальные функции (см. `surveys/aesthetics_ru/build.py`): `numRow(q, code)` — число в строке таблицы,
-  `showRowsWhere(q, fn)` — показать строки по условию, `requireRowText(q, code)` — требовать уточнение «Другое»,
-  `copyOtherText(src, dst, code)` — перенести текст «Другое» в текст строки.
 - ⚠️ Фильтрация вариантов в «Таблица: выпадающий список» скриптом — API не описан в базе знаний;
   сделано с защитой (`try/catch`, колонке дан код 900, чтобы отличить её от списка ответов).
 - ⚠️ Контроль суммы (`AnswersSumControlTarget/Mode/Unit`) в таблице чисел — ждёт проверки.

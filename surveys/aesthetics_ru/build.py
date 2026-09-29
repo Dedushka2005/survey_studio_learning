@@ -4,6 +4,8 @@
 Результат: surveys/aesthetics_ru/aesthetics_ru.json — загружается в SURVEYSTUDIO
 через «Загрузить анкету» в списке анкет (формат SS2EQN 2.4).
 
+Использует общую библиотеку tools/ss_builder.py (+ JS-функции tools/ss_lib.js).
+
 Нумерация вопросов (номер в системе -> имя переменной в массиве):
   5000-5022  скринер, согласия, контакты (S0-S10, CONS, CONT*)
   10-70      раздел 1 (Q1-Q7), номер = номер вопроса * 10
@@ -13,8 +15,12 @@
 """
 import json
 import os
+import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, os.path.join(HERE, '..', '..', 'tools'))
+from ss_builder import (Questionnaire, screen_if, refuse_if,  # noqa: E402
+                        OTHER_TXT, FIXED, OPT_ROW)
 
 # ----------------------------------------------------------------------------
 # Справочники
@@ -110,89 +116,8 @@ IMPROVE = {
 # Заказчик должен дополнить списки для категорий 2 и 3 кодами марок.
 NPS_FOLLOWUP = {1: [2], 2: [], 3: []}
 
-SCREEN_TEXT = 'Благодарим вас за уделенное время! К сожалению, по условиям исследования вы не можете принять в нем участие.'
-REFUSE_TEXT = 'Благодарим вас за уделенное время! До свидания.'
-
-# ----------------------------------------------------------------------------
-# Построитель
-# ----------------------------------------------------------------------------
-questions = []
-answer_lists = {}
-_order = [0]
-
-
-def alist(name, items, flags=None, lst_type='Common'):
-    """items: dict code->text или список (code, text); flags: dict code->{flag: True}."""
-    if name in answer_lists:
-        return name
-    flags = flags or {}
-    pairs = list(items.items()) if isinstance(items, dict) else list(items)
-    answer_lists[name] = {
-        'Name': name,
-        'Type': lst_type,
-        'AnswerItems': [
-            {'OrderIdx': i + 1, 'Code': code, 'Text': text, 'ExportedFlags': flags.get(code, {})}
-            for i, (code, text) in enumerate(pairs)
-        ],
-    }
-    return name
-
-
-def action(atype, condition=None, n1=None, t1=None, n2=None, t2=None):
-    a = {'ActionType': atype}
-    if condition:
-        a['Condition'] = condition
-    if n1 is not None:
-        a['ActionVarLong1'] = n1
-    if t1 is not None:
-        a['ActionVarTxt1'] = t1
-    if n2 is not None:
-        a['ActionVarLong2'] = n2
-    if t2 is not None:
-        a['ActionVarTxt2'] = t2
-    return a
-
-
-def q(number, qtype, text, name=None, comment=None, flags=None, survey_flags=None,
-      before=None, after=None, before_actions=None, after_actions=None, **props):
-    _order[0] += 1
-    item = {
-        'OrderIdx': _order[0],
-        'Number': number,
-        'Text': text,
-        'QuestionType': qtype,
-        'ExportedQuestionFlags': flags or {},
-        'ExportedSurveyFlags': survey_flags or {},
-    }
-    if name:
-        item['OutputColumnTemplate'] = name
-    if comment:
-        item['Comment'] = comment
-    if before:
-        item['ScriptBeforeShow'] = before.strip()
-    if after:
-        item['ScriptAfterAnswer'] = after.strip()
-    for key, acts in (('BeforeShowActions', before_actions), ('AfterAnswerActions', after_actions)):
-        if acts:
-            item[key] = [dict(a, OrderIdx=i + 1) for i, a in enumerate(acts)]
-    item.update(props)
-    questions.append(item)
-    return item
-
-
-def screen_if(codes):
-    """Скрипт после ответа: скринаут, если выбран один из кодов."""
-    return 'if (' + ' || '.join(f'Q.isChecked({c})' for c in codes) + ') return screenOut();'
-
-
-def refuse_if(codes):
-    """Скрипт после ответа: завершение при отказе, если выбран один из кодов."""
-    return 'if (' + ' || '.join(f'Q.isChecked({c})' for c in codes) + ') return refuseOut();'
-
-
-OTHER_TXT = {'OpenValueTxt': True}
-FIXED = {'DisableReordering': True}
-OPT_ROW = {'CustomRowValidation': True}
+qnr = Questionnaire('Aesthetics Market Assessment RU (тест)')
+q, alist = qnr.q, qnr.alist
 
 # ----------------------------------------------------------------------------
 # Введение и скринер
@@ -660,7 +585,7 @@ aliases_js = ',\n        '.join(f'{code}: {json.dumps(a, ensure_ascii=False)}'
                                 for code, a in BRAND_ALIASES.items())
 followup_js = ', '.join(f'{c}: {v}' for c, v in NPS_FOLLOWUP.items())
 
-GLOBAL_FUNCTIONS = f'''
+qnr.global_functions = f'''
 // Коды марок по категориям (1 - объем и лифтинг, 2 - увлажнение, 3 - биостимуляторы)
 function catBrands(cat) {{
     let map = {{{cat_brands_js}}};
@@ -673,71 +598,9 @@ function npsFollowUpBrands(cat) {{
     return map[cat] || [];
 }}
 
-// Скринаут с результатом "Скрининг" (не подходит по критериям отбора)
-function screenOut() {{
-    return exitWithResult(InterviewResult.Screening, '{SCREEN_TEXT}');
-}}
-
-// Отказ от участия с результатом "Завершено"
-function refuseOut() {{
-    return exitWithResult(InterviewResult.Exited, '{REFUSE_TEXT}');
-}}
-
-// Число в строке табличного числового вопроса (0, если строка скрыта или пуста)
-function numRow(q, code) {{
-    let row = q.rows[code];
-    if (row === undefined || !row.visible) return 0;
-    let v = row.answer.openValueNum;
-    return v === undefined ? 0 : v;
-}}
-
 // Врач проводит процедуры категории (S3 > 0)
 function catActive(cat) {{
     return numRow(Q5003, cat) > 0;
-}}
-
-// Показать только строки, для кодов которых predicate вернул true
-function showRowsWhere(q, predicate) {{
-    q.rows.hideAll();
-    for (let code of q.rows.getCodes()) {{
-        if (predicate(code)) q.rows.show(code);
-    }}
-}}
-
-// Если в строке "Другое" указано число > 0, требовать уточнение
-function requireRowText(q, code) {{
-    let row = q.rows[code];
-    if (row === undefined || !row.visible) return ok;
-    let v = row.answer.openValueNum;
-    if (v !== undefined && v > 0 && !row.openValueTxt) {{
-        return error('Пожалуйста, уточните вариант «' + row.plainText + '»');
-    }}
-    return ok;
-}}
-
-// Подставить текст "Другое" из строки вопроса src в строку вопроса dst
-function copyOtherText(src, dst, code) {{
-    if (dst.rows[code] === undefined || src.rows[code] === undefined) return;
-    let txt = src.rows[code].openValueTxt;
-    dst.rows[code].text = txt ? 'Другое: ' + txt : 'Другое';
-}}
-
-// Оставить в выпадающих списках таблицы только указанные коды.
-// Колонка таблицы имеет код 900: если объект answers содержит его, значит это колонки,
-// а не выпадающий список, и фильтровать его нельзя.
-function filterDropdown(q, codes) {{
-    if (codes.length === 0) return;
-    let isDropdownList = function (list) {{
-        return list !== undefined && list.getCodes().indexOf(900) === -1 && list.count > 1;
-    }};
-    try {{
-        if (isDropdownList(q.answers)) {{ q.answers.showOnly(codes); return; }}
-    }} catch (e) {{ }}
-    for (let row of q.rows.getAll()) {{
-        try {{
-            if (isDropdownList(row.answers)) row.answers.showOnly(codes);
-        }} catch (e) {{ }}
-    }}
 }}
 
 // Известные врачу марки категории: отмеченные в Q9 (раздел 2) и используемые в разделе 3
@@ -765,19 +628,11 @@ function findBrands(text, codes) {{
     let aliases = {{
         {aliases_js}
     }};
-    let norm = String(text).toLowerCase().replace(/ё/g, 'е').replace(/[^a-zа-я0-9]/g, '');
-    let found = [];
-    for (let code of codes) {{
-        let list = aliases[code] || [];
-        for (let a of list) {{
-            if (norm.indexOf(a) > -1) {{ found.push(code); break; }}
-        }}
-    }}
-    return found;
+    return findByAliases(text, aliases, codes);
 }}
 '''
 
-PREPROCESSING = '''
+qnr.preprocessing = '''
 // Раздел 2: одинаковый случайный порядок марок в Q9 и Q10 (96/97 - на месте)
 Q90.answers.randomize();
 Q100.rows.setOrder(Q90.answers.getCodes().filter(function (code) { return code !== 97; }));
@@ -796,36 +651,4 @@ for (let base of [130, 210, 290]) {
 }
 '''
 
-questionnaire = {
-    'Magic': 'SS2EQN',
-    'Version': '2.4',
-    'Name': 'Aesthetics Market Assessment RU (тест)',
-    'ExportedQuestionnaireFlags': {'AddSubstitutionsToTemplates': True},
-    'ExportedSurveyFlags': {'HideQuestionNumbers': True, 'HideAnswerCodes': True},
-    'ScriptGlobalFunctions': GLOBAL_FUNCTIONS.strip(),
-    'ScriptPreProcessing': PREPROCESSING.strip(),
-    'Questions': questions,
-    'AnswerLists': list(answer_lists.values()),
-}
-
-
-def validate(qnr):
-    numbers = [x['Number'] for x in qnr['Questions']]
-    assert len(numbers) == len(set(numbers)), 'повторяются номера вопросов'
-    names = [x.get('OutputColumnTemplate') for x in qnr['Questions'] if x.get('OutputColumnTemplate')]
-    assert len(names) == len(set(n.lower() for n in names)), 'повторяются имена переменных'
-    lists = {a['Name'] for a in qnr['AnswerLists']}
-    for x in qnr['Questions']:
-        for key in ('AnswerList', 'RowList', 'ColumnList'):
-            if key in x:
-                assert x[key] in lists, f"Q{x['Number']}: нет списка {x[key]}"
-    for a in qnr['AnswerLists']:
-        codes = [i['Code'] for i in a['AnswerItems']]
-        assert len(codes) == len(set(codes)), f"список {a['Name']}: повторяются коды"
-
-
-validate(questionnaire)
-out = os.path.join(HERE, 'aesthetics_ru.json')
-with open(out, 'w', encoding='utf-8') as f:
-    json.dump(questionnaire, f, ensure_ascii=False, indent=2)
-print(f'{out}: {len(questions)} вопросов, {len(answer_lists)} списков ответов')
+qnr.save(os.path.join(HERE, 'aesthetics_ru.json'))
