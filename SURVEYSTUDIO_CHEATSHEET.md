@@ -1,0 +1,174 @@
+# SURVEYSTUDIO — шпаргалка по программированию анкет
+
+Конспект базы знаний https://kb.surveystudio.ru/ (скачать заново: `python3 tools/fetch_kb.py`, страницы
+сохраняются в `kb/`, эта папка не коммитится).
+
+## 1. Три уровня логики
+
+| Уровень | Где задаётся | Для чего |
+|---|---|---|
+| Условие показа | свойство вопроса `Condition` | показать/не показать вопрос |
+| Действия | «Перед показом» / «После ответа» | переходы, скрытие ответов, переменные, ошибки, завершение |
+| Скрипты (JavaScript) | глобальные и у вопроса | всё, что не решается первыми двумя |
+
+Действия выполняются по порядку, пока одно не вернёт окончательный результат (переход, завершение, ошибка).
+
+## 2. Синтаксис выражений (условия показа, действий, счётчиков, квот)
+
+- Операторы: `=  !=  >  <  >=  <=`, `and or not`, скобки.
+- Ключевые слова: `code`, `row`, `valueTxt`, `valueNum`, `valueInt`, `null`.
+- `Q` без номера — текущий вопрос (рекомендуется в «после ответа»).
+- Всегда истинно: `1 = 1`, `any`, `all`. Никогда: `false`, `1 = 2`.
+
+```
+Q1 = 2                          выбран код 2
+Q1(code = 1 or code = 3)        выбран 1 или 3 (предпочтительнее, чем Q1=1 or Q1=3)
+Q1(code >= 1 and code <= 5)     код в диапазоне
+Q1(code = 98 and valueTxt != null)   выбран 98 и заполнено «другое»
+Q1(valueNum >= 18 and valueNum <= 35) числовой вопрос в диапазоне
+Q1(row = 1 and code = 4)        таблица: в строке 1 выбран код 4
+not Q1 != 99                    таблица: во всех строках выбран 99
+Q1 and not Q1 = 3               вопрос отвечен и код 3 НЕ выбран
+Q = 3 and not Q != 3            выбран ТОЛЬКО код 3
+```
+
+**Ловушка `!=`:** `Q1 != 3` означает «есть ли ответ с кодом ≠ 3». Для множественного выбора
+это почти всегда не то. Правильно — `Q1 and not Q1 = 3`.
+
+Сравнение `valueTxt` только по точному совпадению (регистр и пробелы важны).
+
+## 3. Подстановки в тексты
+
+- `{Q1}` — текст выбранного ответа (для «другое» — вписанный текст; несколько — через запятую).
+- `{Q5.1N}` / `{Q5.98T}` — число/текст из открытого поля ответа (или строки таблицы).
+- `{Q5.1}` — значение строки 1 табличного текстового/числового вопроса.
+- `{Q5.1.2N}` — число поля ответа 2 в строке 1 таблицы с выбором.
+- `{ИмяПеременной}` — значение из `variables` (действие «Установить значение переменной» или `V.x = ...`).
+- В циклах: `{answerText}`, `{answerCode}`.
+
+## 4. Основные действия (ActionType в файле анкеты)
+
+Переходы: `JumpToQuestion`(N1=номер), `JumpToEnd`(T1=текст, N1=результат), `Skip`, `SkipIfNoVisible`,
+`SkipIfVisibleNoMoreThan`(N1), `Answered`, `AnsweredOrSkip`, `ReturnError`(T1=текст), `ResetAnswers`,
+`CopyAnswersFromQuestion`(N1), `ChooseFirstVisibleAnswer`(N1), `FillAnswerFromParameter`, `LoadAnswersFromContactData`.
+
+Ответы: `HideAll`, `HideCodes`(T1="2,5,6"), `HideOnlyCodes`, `HideCheckedInQuestion`(N1),
+`HideOnlyCheckedInQuestion`, `HideFromTo`(N1,N2), `ShowAll`, `ShowCodes`, `ShowOnlyCodes`,
+`ShowCheckedInQuestion`(N1), `ShowOnlyCheckedInQuestion`(N1), `ShowFromTo`(N1,N2) …
+Для строк — префикс `Rows…`, для колонок — `Columns…`.
+
+Переменные: `SetVariableValue`(T1=имя, T2=значение), `SetVariableValueFromOpenValue`(T1=имя, N2=вопрос, T2=код),
+`SetVariableValueFromContactData`(T1=имя, T2=поле).
+
+## 5. Скрипты
+
+Типы: **Подготовка** (один раз при старте и при выгрузке; только структура: создание/порядок вопросов,
+циклы, флаги; не логика!), **Обработка** (после завершения, перед записью), **Перед показом**,
+**После ответа** (глобальные — выполняются до скриптов вопроса), **Функции** (общие функции),
+**Во время показа** (в браузере, без API), **CSS**.
+
+Пишется только тело функции; параметр `Q` — текущий вопрос.
+
+Возвращаемые значения:
+```js
+return ok;            // ничего особенного
+return skip;          // (перед показом) сбросить и пропустить
+return answered;      // (перед показом) ответ проставлен скриптом, не показывать
+return error('Текст');// (после ответа) показать вопрос снова с ошибкой
+return question(123); // переход на Q123
+return exit('Спасибо');                                  // завершить (Завершено)
+return exitWithResult(InterviewResult.Screening, 'Текст'); // скринаут
+return exitAndRedirect('Текст', 'https://...');
+```
+`InterviewResult`: Completed, Screening, Overquoting, Defect, Interrupted, Postponed, Exited, Unknown.
+
+### Доступ к данным
+```js
+Q1, questions[34]              // вопрос
+Q1[5].checked / Q1.answers[5]  // ответ с кодом 5
+Q1.isChecked(5)                // выбран ли код 5
+Q1.getCheckedCode()            // код (единств. выбор), 0 если нет
+Q1.getCheckedCodes()           // массив кодов
+Q1.getChecked()                // массив объектов-ответов
+Q1.openValueNum / openValueInt / openValueTxt   // числовой/текстовый вопрос
+Q1[98].openValueTxt            // «другое»
+Q1.isAnswered
+Q2.rows[3].getCheckedCode()    // таблица
+calc('Q1(code = 1 or code = 3)')  // выражение из п.2 внутри скрипта
+V.name = '...'; variables['ФИО']  // глобальные переменные (только простые типы)
+parameters.city                // параметр ссылки
+contact.data['Поле']           // база контактов
+getCounter('Имя') -> {value, quota}
+isTesting(), isPostProcessing(), isValidation(), isRedial()
+```
+
+### Управление ответами (то же для `rows`, `columns`)
+```js
+Q.hideAll(); Q.show(1, [3,5]); Q.showOnly(Q1.getCheckedCodes()); Q.hide(99);
+Q.showFromTo(1, 10); Q.visibleCount; Q.hasVisible
+Q.answers.randomize(); Q.answers.rotate(); Q.answers.randomizeGroups([[1,3],[4,6]]);
+Q.answers.setOrder(Q1.answers.getCodes());   // тот же порядок, что в Q1
+Q.answers.add(99, 'Не знаю').settings.blocking = true;
+Q.reset();
+```
+
+### Вопросы (в Подготовке)
+```js
+questions.randomize([1,3,5]); questions.rotateFromTo(10, 20);
+questions.randomizeGroups([[1,2],[3,8],[9,9]]);
+questions.repeat(2, 3, 1);        // цикл: Q2–Q3 для каждого выбранного в Q1
+questions.repeatIfNot(2, 3, 1);   // для невыбранных
+```
+Цикл пересоздаёт вопросы с номерами «исходный номер + код ответа» (Q201, Q298 …; разрядность по максимальному коду).
+Внутри цикла: `Q.sourceAnswerCode`, `Q.sourceQuestionNumber`, `Q.currentIterationQuestions[2]`.
+Обычные условия показа по вопросам цикла не работают — используйте скрипты перед показом.
+Ответу, который не должен порождать итерацию (например «Никакими»), ставится флаг «Запрещено использовать в циклах».
+
+## 6. Типовые приёмы
+
+- **Скринаут:** действие после ответа `JumpToEnd` с условием, либо `return exitWithResult(InterviewResult.Screening)`.
+- **Показать только выбранные ранее:** действие `ShowOnlyCheckedInQuestion` (N1 = номер) + `SkipIfNoVisible`.
+- **Автокодирование возраста** (перед показом вопроса-группы):
+  ```js
+  let age = Q1.openValueInt;
+  Q[1].checked = age <= 17; Q[2].checked = age >= 18 && age <= 24; /* … */
+  return answered;
+  ```
+- **Сумма = 100** в таблице чисел: свойства `AnswersSumControlTarget = 100`, `AnswersSumControlMode = Exactly`.
+- **Исключающий ответ** («Затрудняюсь ответить»): флаг ответа `Blocking`.
+- **Необязательный вопрос:** флаг `CanSkip` (при «Пропустить» действия/скрипты после ответа не выполняются).
+- **Собственная проверка:** флаг `CustomValidation` + скрипт после ответа с `return error(...)`.
+- **Служебный вопрос:** условие показа `false`, флаг `SkipExport`.
+- **Нельзя переходить к вопросу, который перемешивается с другими** — остальные из группы будут пропущены.
+
+## 7. Формат файла анкеты (импорт/экспорт, JSON, UTF‑8)
+
+```json
+{
+  "Magic": "SS2EQN", "Version": "2.4", "Name": "Анкета",
+  "ExportedQuestionnaireFlags": {}, "ExportedSurveyFlags": {},
+  "ScriptPreProcessing": "questions.repeat(2, 3, 1);",
+  "Questions": [
+    { "OrderIdx": 1, "Number": 1, "Text": "Ваш пол?", "QuestionType": "SingleChoice",
+      "ExportedQuestionFlags": {}, "ExportedSurveyFlags": {}, "AnswerList": "Пол",
+      "AfterAnswerActions": [
+        { "OrderIdx": 1, "Condition": "Q = 3", "ActionType": "JumpToEnd",
+          "ActionVarTxt1": "Спасибо!" } ] }
+  ],
+  "AnswerLists": [
+    { "Name": "Пол", "Type": "Common", "AnswerItems": [
+      { "OrderIdx": 1, "Code": 1, "Text": "Мужской", "ExportedFlags": {} },
+      { "OrderIdx": 2, "Code": 2, "Text": "Женский", "ExportedFlags": {} } ] }
+  ]
+}
+```
+Обязательно у вопроса: `OrderIdx, Number, Text, QuestionType, ExportedQuestionFlags, ExportedSurveyFlags`.
+Типы: Information, WelcomeScreen, Text, Numeric, Phone, Email, DateTime, SingleChoice, MultipleChoice,
+Dropdown_SingleChoice, Dropdown_MultipleChoice, Ranking, Rating, Slider, MaxDiff, SemanticDifferential,
+Table_Text, Table_Numeric, Table_SingleChoice, Table_MultipleChoice, Table_Dropdown_SingleChoice, Table_Rating, Table_Slider …
+Поля вопроса: `Condition, Comment, AnswerList, RowList, ColumnList, MinAnswerCount, MaxAnswerCount,
+AnswerNumberFrom, AnswerNumberTo, ScriptBeforeShow, ScriptAfterAnswer, BeforeShowActions, AfterAnswerActions, OutputColumnTemplate`.
+Флаги ответа: `OpenValueNum, OpenValueTxt, Blocking, AlwaysVisible, DisableReordering, DisableRepeat, GroupHeader, SkipExport`.
+Флаги вопроса: `RandomizeAnswers, RotateAnswers, CanSkip, CustomValidation, SkipExport, ShowRowsOneByOne`.
+
+Значит, анкету можно собрать целиком в JSON и загрузить в систему одним файлом.
