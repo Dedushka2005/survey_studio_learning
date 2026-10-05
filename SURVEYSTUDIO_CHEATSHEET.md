@@ -195,7 +195,9 @@ AnswerNumberFrom, AnswerNumberTo, ScriptBeforeShow, ScriptAfterAnswer, BeforeSho
   - `tools/ss_lib.js` — JS-функции, автоматически попадают в раздел «Функции» каждой анкеты:
     `screenOut()`, `refuseOut()`, `numRow(q, code)`, `sumRows(q)`, `showRowsWhere(q, fn)`,
     `showAnswersWhere(q, fn)`, `requireRowText(q, code)`, `copyOtherText(src, dst, code)`,
-    `checkedText(q)`, `filterDropdown(q, codes)` ⚠️, `findByAliases(text, aliases, codes)`.
+    `checkedText(q)`, `findByAliases(text, aliases, codes)`,
+    `autoAnswerIfSingle(q)`, `autoFillIfSingle(q, total)`, `requireSum(q, target)`, `rowError(q, code, msg)`,
+    `resetRowMarks(q)`.
     Тексты скринаута/отказа задаются в `Questionnaire(screen_text=…, refuse_text=…)`.
   - Функции конкретной анкеты — в `qnr.global_functions`, они добавляются после общих.
   - `tools/loi_estimate.py` — **оценка длительности анкеты (LOI)** по JSON: чтение текста + действия
@@ -211,6 +213,13 @@ AnswerNumberFrom, AnswerNumberTo, ScriptBeforeShow, ScriptAfterAnswer, BeforeSho
 - Строку «Прочее (укажите)» в числовой таблице делаем необязательной (`CustomRowValidation` + `AllowEmptyOpenValue`)
   и проверяем `requireRowText()`: число без текста или текст без числа — ошибка.
 - Заголовки разделов с вводным текстом — отдельным информационным экраном, а не шапкой каждого вопроса.
+- **Автоответ при единственном варианте:** если после фильтра остался один вариант (или одна строка в таблице
+  долей), вопрос не показываем, а ответ ставим скриптом — `return autoAnswerIfSingle(Q);` /
+  `return autoFillIfSingle(Q, 100);`. Только там, где ответ логически вынужден («чаще всего» из одного
+  назначаемого, ранжирование одной компании, доля одной марки = 100%).
+- Проверки согласованности с предыдущими ответами — ошибкой с подсветкой строки:
+  `resetRowMarks(Q); if (…) return rowError(Q, code, 'Ранее вы сказали, что …');`
+- Внутри цикла код итерации берём из `Q.sourceAnswerCode`, а не вычисляем из `Q.number`.
 
 ## 9. Проверено на практике
 
@@ -239,6 +248,19 @@ AnswerNumberFrom, AnswerNumberTo, ScriptBeforeShow, ScriptAfterAnswer, BeforeSho
 - ⚠️ Подстановка списка в информационный экран: скрипт перед показом пишет HTML в переменную
   (`V['Категории'] = '<ul>…</ul>'`), в тексте экрана — `{Категории}`.
 - ✅ Скринер и разделы 1–2 анкеты Aesthetics прошли тест пользователя (с правками выше).
-- ⚠️ Фильтрация вариантов в «Таблица: выпадающий список» скриптом — API не описан в базе знаний;
-  сделано с защитой (`try/catch`, колонке дан код 900, чтобы отличить её от списка ответов).
+- ❌ **Фильтровать варианты в «Таблица: выпадающий список» нельзя** (ответ поддержки SURVEYSTUDIO).
+  Если список надо сузить — делать циклом простых вопросов с выбором (там `showOnly` работает).
+- ✅ Макрос «другого» прямо в тексте варианта/строки списка: строка 98 с текстом `{Q19.98T}` покажет то,
+  что вписали в «Другое» в Q19. Проще, чем скрипт `copyOtherText()`.
+- ✅ Флаг анкеты `GenerateQuestionVariableByTemplate` — в скриптах можно обращаться к вопросу по имени
+  шаблона (`QB7.rows…` вместо `Q26.rows…`). Чтобы имена не пересекались с `Q<номер>`, давать шаблонам префикс
+  блока: `QS1`, `QB7`, `QC2`.
+- ✅ Проверка суммы скриптом после ответа работает (анкета пользователя Репчек КЗ) — `requireSum()`.
+- ✅ Служебный вопрос с условием показа `false`, ответы которого отмечает скрипт другого вопроса: источник
+  цикла и общий случайный порядок (Q8003 перемешан в Подготовке → D1 `rows.setOrder(Q8003.answers.getCodes())`
+  и цикл D2 по Q8003 идут в одном порядке).
+- Частые ошибки (найдены при ревью): `exitScreen()` без `return` — интервью не завершится;
+  `visibleCount > 1 ? ok : skip` пропускает вопрос с одной строкой — нужен `hasVisible`; табличный вопрос без
+  видимых строк надо явно пропускать (`return Q.rows.hasVisible ? ok : skip;`); исключающему ответу без групп
+  нужен флаг `Blocking`, а не `BlockingInTheGroup`.
 - ⚠️ Контроль суммы (`AnswersSumControlTarget/Mode/Unit`) в таблице чисел — ждёт проверки.

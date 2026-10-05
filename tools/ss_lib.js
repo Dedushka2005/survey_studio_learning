@@ -79,22 +79,57 @@ function checkedText(q) {
     return parts.join(', ');
 }
 
-// Оставить в выпадающих списках таблицы только указанные коды. ⚠️ не проверено в системе.
-// Колонкам таблицы давать код 900: если объект answers содержит его, значит это колонки,
-// а не выпадающий список, и фильтровать его нельзя.
-function filterDropdown(q, codes) {
-    if (codes.length === 0) return;
-    let isDropdownList = function (list) {
-        return list !== undefined && list.getCodes().indexOf(900) === -1 && list.count > 1;
-    };
-    try {
-        if (isDropdownList(q.answers)) { q.answers.showOnly(codes); return; }
-    } catch (e) { }
-    for (let row of q.rows.getAll()) {
-        try {
-            if (isDropdownList(row.answers)) row.answers.showOnly(codes);
-        } catch (e) { }
+// ---------------------------------------------------------------------------
+// Автоответ, если после фильтра остался один вариант (приём из анкеты пользователя)
+// Использовать только там, где единственный вариант — логически вынужденный ответ
+// («чаще всего» из одного регулярно назначаемого, ранжирование одной компании и т.п.).
+// ---------------------------------------------------------------------------
+
+// Вопрос с выбором: один видимый вариант — отметить и не показывать; ни одного — пропустить.
+// Использование в скрипте перед показом:
+//   Q.showOnly(Q23.getCheckedCodes());
+//   return autoAnswerIfSingle(Q);
+function autoAnswerIfSingle(q) {
+    let codes = q.answers.getVisibleCodes();
+    if (codes.length === 1) {
+        q[codes[0]].checked = true;
+        return answered;
     }
+    return codes.length > 0 ? ok : skip;
+}
+
+// Числовая таблица (доли, сумма = total): одна видимая строка — вписать total и не показывать.
+// Использование: showRowsWhere(Q, …); return autoFillIfSingle(Q, 100);
+function autoFillIfSingle(q, total) {
+    let codes = q.rows.getVisibleCodes();
+    if (codes.length === 1) {
+        q.rows[codes[0]].answer.openValueNum = total;
+        return answered;
+    }
+    return codes.length > 0 ? ok : skip;
+}
+
+// Проверка суммы видимых строк числовой таблицы (скрипт после ответа).
+// Использование: return requireSum(Q, 100);  или  return requireSum(Q, Q16.openValueInt);
+function requireSum(q, target) {
+    let total = +sumRows(q).toFixed(2);
+    if (total !== target) {
+        return error('Сумма значений должна быть равна ' + target + '. Сейчас: ' + total + '.');
+    }
+    return ok;
+}
+
+// Выделить строку таблицы красным и вернуть ошибку (скрипт после ответа).
+// Перед проверками вызвать resetRowMarks(Q), чтобы снять старые выделения.
+//   resetRowMarks(Q);
+//   if (…) return rowError(Q, code, 'Ранее вы сказали, что …');
+function rowError(q, code, message) {
+    q.rows[code].text = '<font color="red"><b>' + q.rows[code].plainText + '</b></font>';
+    return error(message);
+}
+
+function resetRowMarks(q) {
+    for (let row of q.rows.getVisible()) row.text = row.plainText;
 }
 
 // Найти в тексте упоминания по словарю синонимов { код: ['вариант1', 'вариант2'] }.
