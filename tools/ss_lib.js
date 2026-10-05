@@ -132,6 +132,23 @@ function resetRowMarks(q) {
     for (let row of q.rows.getVisible()) row.text = row.plainText;
 }
 
+// ❌ УСТАРЕЛО: SURVEYSTUDIO не умеет фильтровать варианты в «Таблица: выпадающий список» (ответ поддержки).
+// Оставлено только для совместимости со старой анкетой Aesthetics RU. В новых анкетах не использовать.
+function filterDropdown(q, codes) {
+    if (codes.length === 0) return;
+    let isDropdownList = function (list) {
+        return list !== undefined && list.getCodes().indexOf(900) === -1 && list.count > 1;
+    };
+    try {
+        if (isDropdownList(q.answers)) { q.answers.showOnly(codes); return; }
+    } catch (e) { }
+    for (let row of q.rows.getAll()) {
+        try {
+            if (isDropdownList(row.answers)) row.answers.showOnly(codes);
+        } catch (e) { }
+    }
+}
+
 // Найти в тексте упоминания по словарю синонимов { код: ['вариант1', 'вариант2'] }.
 // Регистр, пробелы и знаки препинания не учитываются. Возвращает массив кодов.
 function findByAliases(text, aliases, codes) {

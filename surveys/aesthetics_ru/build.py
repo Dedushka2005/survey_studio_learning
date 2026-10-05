@@ -556,8 +556,7 @@ return Q.rows.hasVisible ? ok : skip;
       AnswerList=dd_list, before=f'''
 showRowsWhere(Q, function (code) {{ return numRow(Q{base + 20}, code) > 0; }});
 copyOtherText(Q{base + 20}, Q, 98);
-// Фильтровать варианты выпадающего списка в таблице SURVEYSTUDIO не умеет (ответ поддержки) —
-// в списке все марки категории.
+filterDropdown(Q, Q{base}.rows.getCodes().filter(function (code) {{ return numRow(Q{base}, code) > 0; }}));
 return Q.rows.hasVisible ? ok : skip;
 ''')
 
@@ -567,7 +566,11 @@ return Q.rows.hasVisible ? ok : skip;
       name=f'Q{qn + 4}', comment='Выберите одну марку в каждой строке', Condition=cat_cond,
       RowList='Сценарии', ColumnList=alist('Одна колонка: подходящая марка',
                                            {900: 'Наиболее подходящая марка'}),
-      AnswerList=dd_list_dk)
+      AnswerList=dd_list_dk, before=f'''
+let known = knownBrands({c}, Q{base});
+known.push(99);
+filterDropdown(Q, known);
+''')
 
     q(base + 50, 'SingleChoice',
       f'Каков типичный подход к ценообразованию на процедуры с {CAT_SHORT[c]} в вашем месте работы?',
@@ -609,6 +612,17 @@ function q12AlwaysBrands() {{
 // Врач проводит процедуры категории (S3 > 0)
 function catActive(cat) {{
     return numRow(Q5003, cat) > 0;
+}}
+
+// Известные врачу марки категории: отмеченные в Q9 (раздел 2) и используемые в разделе 3
+function knownBrands(cat, shareQ) {{
+    let result = [];
+    let q9 = (900 + cat) in questions ? questions[900 + cat] : undefined;
+    for (let code of catBrands(cat).concat([98])) {{
+        let aware = q9 !== undefined && code !== 98 && q9.isChecked(code);
+        if (aware || numRow(shareQ, code) > 0) result.push(code);
+    }}
+    return result;
 }}
 
 // Категория, к которой относится марка
