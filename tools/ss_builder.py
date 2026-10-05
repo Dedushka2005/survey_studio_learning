@@ -186,7 +186,51 @@ class Questionnaire:
         for a in data['AnswerLists']:
             codes = [i['Code'] for i in a['AnswerItems']]
             assert len(codes) == len(set(codes)), f"список «{a['Name']}»: повторяются коды"
+        self.check_references(data)
         self.check_js_syntax(data)
+
+    @staticmethod
+    def check_references(data):
+        """Проверить, что вопросы, упомянутые в скриптах и условиях, существуют.
+
+        В скриптах допустимы Q<номер> и имена шаблонов (флаг GenerateQuestionVariableByTemplate),
+        в условиях (язык выражений) — только Q<номер>.
+        """
+        import re
+        numbers = {x['Number'] for x in data['Questions']}
+        by_name = data.get('ExportedQuestionnaireFlags', {}).get('GenerateQuestionVariableByTemplate')
+        names = {x['OutputColumnTemplate'] for x in data['Questions']
+                 if by_name and x.get('OutputColumnTemplate') and '{' not in x['OutputColumnTemplate']}
+        problems = []
+
+        def known(token):
+            if token in names:
+                return True
+            m = re.fullmatch(r'Q(\d+)', token)
+            # номера вопросов циклов создаются при запуске — их не проверить
+            return bool(m) and (int(m.group(1)) in numbers or len(m.group(1)) > 6)
+
+        scripts = [('Функции', data.get('ScriptGlobalFunctions', '')),
+                   ('Подготовка', data.get('ScriptPreProcessing', '')),
+                   ('Обработка', data.get('ScriptPostProcessing', ''))]
+        for x in data['Questions']:
+            for key in ('ScriptBeforeShow', 'ScriptAfterAnswer'):
+                if x.get(key):
+                    scripts.append((f"Q{x['Number']} {key}", x[key]))
+        for where, code in scripts:
+            code = re.sub(r"'(?:\\.|[^'\\])*'|\"(?:\\.|[^\"\\])*\"|`[^`]*`|//[^\n]*", '', code)
+            for token in set(re.findall(r'\b([QS]\d\w*)\b', code)):
+                if not known(token):
+                    problems.append(f'{where}: неизвестный вопрос {token}')
+        for x in data['Questions']:
+            conds = [x.get('Condition') or '']
+            conds += [a.get('Condition') or '' for k in ('BeforeShowActions', 'AfterAnswerActions')
+                      for a in x.get(k, [])]
+            for cond in conds:
+                for num in re.findall(r'\bQ(\d+)', cond):
+                    if int(num) not in numbers:
+                        problems.append(f"Q{x['Number']} условие: нет вопроса Q{num}")
+        assert not problems, '\n'.join(problems)
 
     @staticmethod
     def check_js_syntax(data):

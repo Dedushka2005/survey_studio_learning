@@ -132,6 +132,50 @@ function resetRowMarks(q) {
     for (let row of q.rows.getVisible()) row.text = row.plainText;
 }
 
+// Строка «Другое» таблицы с выбором (необязательная строка с полем для текста):
+// вписан текст — нужен ответ в строке; есть ответ — нужен текст.
+// Использование в скрипте после ответа: return requireChoiceRowText(Q, 96);
+function requireChoiceRowText(q, code) {
+    let row = q.rows[code];
+    if (row === undefined || !row.visible) return ok;
+    let answered = row.getCheckedCodes().length > 0;
+    if (row.openValueTxt && !answered) {
+        return error('Пожалуйста, дайте ответ в строке «' + row.plainText + '»');
+    }
+    if (answered && !row.openValueTxt) {
+        return error('Пожалуйста, уточните вариант «' + row.plainText + '»');
+    }
+    return ok;
+}
+
+// Нестрогая проверка: при первом «Далее» показать предупреждение, при повторном нажатии
+// с теми же ответами — пропустить. Если ответ изменили и условие снова выполняется — предупредить снова.
+// Использование в скрипте после ответа:
+//   return softWarning(Q, Q.rows.getVisible().some(r => r.answer.openValueNum > 12),
+//                      'Вы указали больше 12. Проверьте, пожалуйста, верно ли указано число.');
+function softWarning(q, condition, message) {
+    if (isPostProcessing() || isValidation()) return ok;
+    let key = 'softWarning_' + q.number;
+    if (!condition) { V[key] = ''; return ok; }
+    let signature = answerSignature(q);
+    if (V[key] === signature) return ok;
+    V[key] = signature;
+    return error(message);
+}
+
+// Строка-«слепок» ответа на вопрос (для softWarning): числа/тексты строк, открытые значения, коды.
+function answerSignature(q) {
+    let parts = [];
+    try {
+        for (let row of q.rows.getVisible()) {
+            parts.push(row.code + ':' + row.answer.openValueNum + ':' + row.answer.openValueTxt + ':' + row.openValueTxt);
+        }
+    } catch (e) { }
+    try { parts.push(String(q.openValueNum) + ':' + String(q.openValueTxt)); } catch (e) { }
+    try { parts.push(q.getCheckedCodes().join(',')); } catch (e) { }
+    return parts.join('|');
+}
+
 // ❌ УСТАРЕЛО: SURVEYSTUDIO не умеет фильтровать варианты в «Таблица: выпадающий список» (ответ поддержки).
 // Оставлено только для совместимости со старой анкетой Aesthetics RU. В новых анкетах не использовать.
 function filterDropdown(q, codes) {

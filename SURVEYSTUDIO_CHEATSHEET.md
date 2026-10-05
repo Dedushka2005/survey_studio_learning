@@ -197,7 +197,9 @@ AnswerNumberFrom, AnswerNumberTo, ScriptBeforeShow, ScriptAfterAnswer, BeforeSho
     `showAnswersWhere(q, fn)`, `requireRowText(q, code)`, `copyOtherText(src, dst, code)`,
     `checkedText(q)`, `findByAliases(text, aliases, codes)`,
     `autoAnswerIfSingle(q)`, `autoFillIfSingle(q, total)`, `requireSum(q, target)`, `rowError(q, code, msg)`,
-    `resetRowMarks(q)`.
+    `resetRowMarks(q)`, `requireChoiceRowText(q, code)` (строка «Другое» в таблице с выбором),
+    `softWarning(q, condition, msg)` (нестрогая проверка: предупредить один раз, повторное «Далее» пропускает).
+  - `save()` также проверяет, что вопросы из скриптов (`Q<номер>`, имена шаблонов) и условий существуют.
     Тексты скринаута/отказа задаются в `Questionnaire(screen_text=…, refuse_text=…)`.
   - Функции конкретной анкеты — в `qnr.global_functions`, они добавляются после общих.
   - `tools/loi_estimate.py` — **оценка длительности анкеты (LOI)** по JSON: чтение текста + действия
@@ -220,6 +222,17 @@ AnswerNumberFrom, AnswerNumberTo, ScriptBeforeShow, ScriptAfterAnswer, BeforeSho
 - Проверки согласованности с предыдущими ответами — ошибкой с подсветкой строки:
   `resetRowMarks(Q); if (…) return rowError(Q, code, 'Ранее вы сказали, что …');`
 - Внутри цикла код итерации берём из `Q.sourceAnswerCode`, а не вычисляем из `Q.number`.
+- **Блоки «для каждой категории» разворачиваем генератором в N копий** (`Q7_1`, `Q7_2`, …), а не циклом
+  SURVEYSTUDIO: тогда вопросы «для каждого бренда» внутри блока — обычный одноуровневый цикл, имена переменных
+  явные. Случайный порядок блоков — `questions.randomizeGroups([[первый, последний], …])` в Подготовке.
+- Строки таблиц перемешиваем скриптом в Подготовке `Qxx.rows.randomize()`, а не флагом вопроса
+  «Рандомизация» (⚠️ флаг у таблицы может перемешать и колонки-шкалу — не проверено).
+- Топ-3 с рангами: множественный выбор ровно 3 (`MinAnswerCount = MaxAnswerCount = 3`) + вопрос
+  «Ранжирование» с `Q.showOnly(Qxx.getCheckedCodes())`.
+- «Не знаю» в числовых/текстовых таблицах — пустое поле (строка необязательная, `OPT_ROW`), в комментарии
+  «Если не знаете — оставьте поле пустым».
+- TODO: проверить цикл внутри цикла (выполняются ли скрипты вопросов второго уровня) — договорились с
+  пользователем проверить отдельно.
 
 ## 9. Проверено на практике
 
