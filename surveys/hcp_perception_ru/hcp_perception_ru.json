@@ -116,6 +116,7 @@
       "ExportedQuestionFlags": {},
       "ExportedSurveyFlags": {},
       "OutputColumnTemplate": "S5",
+      "ScriptAfterAnswer": "if (Q.isChecked(96)) return screenOut();",
       "AnswerList": "Города",
       "ColumnCount": 2
     },
@@ -1726,6 +1727,12 @@
           "OrderIdx": 16,
           "Code": 16,
           "Text": "Челябинск",
+          "ExportedFlags": {}
+        },
+        {
+          "OrderIdx": 17,
+          "Code": 96,
+          "Text": "Другой город",
           "ExportedFlags": {}
         }
       ]
