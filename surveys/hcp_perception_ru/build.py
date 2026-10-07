@@ -1,6 +1,6 @@
 """Генератор анкеты «Allergan Aesthetics: восприятие брендов и взаимодействие с врачами — Россия».
 
-Источник: Allergan_Aesthetics_Market_Assessment_HCPs_Perception_and_Engagement_QNR_RU_05.10.2026.docx
+Источник: Allergan_Aesthetics_Market_Assessment_HCPs_Perception_and_Engagement_QNR_RU_07.10.2026.docx
 Запуск:  python3 surveys/hcp_perception_ru/build.py  ->  surveys/hcp_perception_ru/hcp_perception_ru.json
 
 Использует общую библиотеку tools/ss_builder.py (+ JS-функции tools/ss_lib.js).
@@ -146,7 +146,7 @@ q(105, 'Table_Numeric',
 q(106, 'Table_Numeric',
   'Какому количеству <b>пациентов</b> Вы лично делаете инъекционные процедуры в среднем в месяц в '
   'каждой из категорий?', name='S3_1', comment=GK_NOTE, RowList='Категории S3',
-  AnswerNumberFrom=0, AnswerNumberTo=9999, before='''
+  AnswerNumberFrom=1, AnswerNumberTo=9999, before='''
 showRowsWhere(Q, function (code) { return catActive(code); });
 return Q.rows.hasVisible ? ok : skip;
 ''', after='''
@@ -224,7 +224,7 @@ q(115, 'SingleChoice',
   '<p><b>Согласие респондента на обработку персональных данных</b></p>'
   '<p>Настоящим даю свое согласие на обработку моих персональных данных, в том числе указанных выше, '
   'свободно, без оговорок, по своей воле и в своих интересах на следующих условиях:</p><ul>'
-  '<li>настоящее согласие дано оператору: ООО «АЙКЬЮВИА Солюшнс» (ОГРН 1087746654060) с целью '
+  '<li>настоящее согласие дано оператору: ТОО «АЙКЬЮВИА Солюшнс Казахстан» с целью '
   'добавления моих персональных данных в базу данных оператора, служащую инструментом коммуникации (в '
   'том числе направление мне информационных сообщений, совершение информационных звонков), осуществления '
   'коммуникации со мной (направление информационных сообщений, в том числе научного и образовательного '
@@ -247,7 +247,7 @@ q(115, 'SingleChoice',
   '<li>настоящее согласие действует со дня его подписания в течение 50 лет либо до дня отзыва настоящего '
   'согласия в письменной форме.</li></ul>'
   '<p>Правильность указанных мной сведений и согласие на внесение моих персональных данных в базу данных '
-  'ООО «АЙКЬЮВИА Солюшнс» для целей, названных выше, подтверждаю.</p>'
+  'ТОО «АЙКЬЮВИА Солюшнс Казахстан» для целей, названных выше, подтверждаю.</p>'
   '<p>Настоящим подтверждаю, что лицами, которые проводили опрос, не было совершено по отношению ко мне '
   'никаких действий / бездействия, которые могли бы нарушить нормы антикоррупционного законодательства '
   'РФ, в т.ч., но не ограничиваясь, нормы Федерального закона № 273-ФЗ «О противодействии коррупции».</p>',
@@ -514,16 +514,26 @@ q(n(17), 'MultipleChoice',
 
 alist('Потребности', {1: 'Неудовлетворенная потребность 1', 2: 'Неудовлетворенная потребность 2',
                       3: 'Неудовлетворенная потребность 3'}, {2: OPT_ROW, 3: OPT_ROW})
-for c in CATS:  # Q18-Q19 задаются по всем трём категориям, независимо от S3
+for c in CATS:  # Q18 — по категориям с S3 > 0
     head = f'<p>Категория: <b>{CATS[c]}</b></p>'
     q(n(18, c), 'Table_Text',
       head + '<p>Каковы наиболее важные неудовлетворенные потребности в этой категории сегодня?</p>',
       name=f'Q18_{c}', comment='Укажите до трех потребностей. Обязательно заполнить только первое поле.',
-      RowList='Потребности')
-    q(n(19, c), 'Text',
-      head + '<p>Какое одно улучшение будет иметь наибольшее положительное влияние на использование Вами '
-             'этой категории в клинической практике?</p>', name=f'Q19_{c}', TextLineCount=3,
-      after='if (Q.openValueTxt.trim().length < 3) return error(\'Пожалуйста, дайте развернутый ответ.\');')
+      Condition=cat_cond(c), RowList='Потребности')
+
+# Q19 — одна таблица по всем трём категориям (независимо от S3), в каждой строке открытое поле
+q(n(19), 'Table_Text',
+  'Какое одно улучшение будет иметь наибольшее положительное влияние на использование Вами каждой из '
+  'указанных категорий в клинической практике?', name='Q19', comment='Заполните поле для каждой категории.',
+  RowList='Категории', after='''
+resetRowMarks(Q);
+for (let row of Q.rows.getVisible()) {
+    let txt = row.answer.openValueTxt;
+    if (txt === undefined || txt.trim().length < 3) {
+        return rowError(Q, row.code, 'Пожалуйста, дайте развернутый ответ для категории «' + row.plainText + '».');
+    }
+}
+''')
 
 # ----------------------------------------------------------------------------
 # Раздел 4: взаимодействие с производителем
@@ -552,7 +562,9 @@ q(n(22), 'Table_Numeric',
 showRowsWhere(Q, function (code) {{ return code === {ALLERGAN} || Q21.isChecked(code); }});
 ''', after=f'''
 for (let row of Q.rows.getVisible()) {{
-    if (row.code !== {ALLERGAN} && row.answer.openValueNum < 1) {{
+    // Allergan может иметь 0, только если не отмечен в Q21; остальные — от 1 до 99
+    let mustInteract = row.code !== {ALLERGAN} || Q21.isChecked({ALLERGAN});
+    if (mustInteract && row.answer.openValueNum < 1) {{
         return error('Для компании «' + row.plainText + '» укажите число от 1 до 99: в предыдущем вопросе Вы ' +
                      'отметили, что она с Вами взаимодействовала.');
     }}
@@ -742,7 +754,6 @@ for c in CATS:
     Q33_BRANDS.update(BRANDS[c])
 for c in CATS:
     Q33_BRANDS[c * 100 + 96] = f'{{Q7_{c}.96T}}'
-alist('Q33 бренды (необяз.)', Q33_BRANDS, {code: OPT_ROW for code in Q33_BRANDS})
 alist('Q33 бренды', Q33_BRANDS)
 Q33_NOTE = ('<b>Конфигурация упаковки</b> = упаковка, приобретаемая клиникой (напр., 1 шприц, 2 шприца, 1 флакон '
             'и т. д.).<br><b>Цена по прейскуранту</b> = официальная опубликованная цена без учета каких-либо '
@@ -753,31 +764,16 @@ SHOW_USED_BRANDS = 'showRowsWhere(Q, function (code) { return usedBrands().index
                    'return Q.rows.hasVisible ? ok : skip;'
 q(n(33, 0, 1), 'Table_Text',
   'В отношении брендов, которые Вы лично использовали за последние 3 месяца, какой формат упаковки '
-  'закупается клиникой?', name='Q33_PACK', comment=Q33_NOTE + '<br>Если не знаете — оставьте поле пустым.',
-  RowList='Q33 бренды (необяз.)', before=SHOW_USED_BRANDS)
+  'закупается клиникой?', name='Q33_PACK', comment=Q33_NOTE + '<br>Если не знаете ответ, впишите 0.',
+  RowList='Q33 бренды', before=SHOW_USED_BRANDS)
 q(n(33, 0, 2), 'Table_Numeric',
-  'Какова обычная закупочная <b>цена по прейскуранту за упаковку</b> для клиники?', name='Q33_LIST',
-  comment=Q33_NOTE + '<br>Если не знаете — оставьте поле пустым.', flags={'AllowFractionalNumbers': True},
-  RowList='Q33 бренды (необяз.)', AnswerNumberFrom=0, AnswerNumberTo=99999999, before=SHOW_USED_BRANDS)
+  'Какова обычная закупочная <b>цена по прейскуранту за упаковку</b> для клиники (руб.)?', name='Q33_LIST',
+  comment=Q33_NOTE + '<br>Цена в рублях. Если не знаете ответ, впишите 0.', flags={'AllowFractionalNumbers': True},
+  RowList='Q33 бренды', AnswerNumberFrom=0, AnswerNumberTo=99999999, before=SHOW_USED_BRANDS)
 q(n(33, 0, 3), 'Table_Numeric',
-  'Какова обычная <b>цена нетто за упаковку</b> для клиники?', name='Q33_NET',
-  comment=Q33_NOTE + '<br>Если не знаете — оставьте поле пустым.', flags={'AllowFractionalNumbers': True},
-  RowList='Q33 бренды (необяз.)', AnswerNumberFrom=0, AnswerNumberTo=99999999, before=SHOW_USED_BRANDS)
-q(n(33, 0, 4), 'Table_SingleChoice', 'В какой валюте указаны цены?', name='Q33_CUR',
-  comment='Один ответ в каждой строке', RowList='Q33 бренды',
-  AnswerList=alist('Валюта', {1: 'Рубли', 2: 'Другая валюта'}), before='''
-showRowsWhere(Q, function (code) {
-    return Q33_LIST.rows[code].visible && (Q33_LIST.rows[code].answer.openValueNum !== undefined ||
-                                           Q33_NET.rows[code].answer.openValueNum !== undefined);
-});
-return Q.rows.hasVisible ? ok : skip;
-''')
-q(n(33, 0, 5), 'Table_Text', 'Укажите, пожалуйста, валюту.', name='Q33_CUR_OTH', RowList='Q33 бренды',
-  before='''
-showRowsWhere(Q, function (code) { return Q33_CUR.rows[code].visible && Q33_CUR.rows[code].isChecked(2); });
-return Q.rows.hasVisible ? ok : skip;
-''')
-
+  'Какова обычная <b>цена нетто за упаковку</b> для клиники (руб.)?', name='Q33_NET',
+  comment=Q33_NOTE + '<br>Цена в рублях. Если не знаете ответ, впишите 0.', flags={'AllowFractionalNumbers': True},
+  RowList='Q33 бренды', AnswerNumberFrom=0, AnswerNumberTo=99999999, before=SHOW_USED_BRANDS)
 q(n(34), 'Table_SingleChoice',
   'Какая цена обычно действует для пациентов в отношении указанных ниже категорий процедур с филлерами в '
   'Вашем месте работы?', name='Q34', comment='Один ответ в каждой строке. ' + GK_NOTE, RowList='Категории',
@@ -789,7 +785,7 @@ return Q.rows.hasVisible ? ok : skip;
 
 PRICE_ROWS = {c * 10 + k: f'{CATS[c]} — {label}' for c in CATS
               for k, label in ((1, 'минимальная'), (2, 'средняя'), (3, 'максимальная'))}
-alist('Цены мин/сред/макс', PRICE_ROWS, {code: OPT_ROW for code in PRICE_ROWS})
+alist('Цены мин/сред/макс', PRICE_ROWS)
 for qn, codes, title, unit in ((35, '1, 3', 'за типичный сеанс лечения', 'руб.'),
                                (36, '2, 3', 'за мл препарата', 'руб./мл')):
     q(n(qn), 'Table_Numeric',
@@ -797,7 +793,7 @@ for qn, codes, title, unit in ((35, '1, 3', 'за типичный сеанс л
       f'({unit})?', name=f'Q{qn}',
       comment=('Просим Вас учесть общую сумму, уплачиваемую пациентом за типичный сеанс лечения, включающую '
                'как стоимость препарата, так и стоимость процедуры. ' if qn == 35 else '') +
-              f'Если не знаете — оставьте поле пустым. {GK_NOTE}',
+              f'Если не знаете цену, впишите 0. {GK_NOTE}',
       RowList='Цены мин/сред/макс', AnswerNumberFrom=0, AnswerNumberTo=99999999, before=f'''
 showRowsWhere(Q, function (code) {{
     let row = Q34.rows[Math.floor(code / 10)];
@@ -968,13 +964,13 @@ function usedBrands() {{
     return result;
 }}
 
-// Q35/Q36: в каждой категории минимальная <= средняя <= максимальная (заполненные значения)
+// Q35/Q36: в каждой категории минимальная <= средняя <= максимальная (0 = «не знаю», не проверяется)
 function requireMinAvgMax(q) {{
     for (let cat of [1, 2, 3]) {{
         let values = [1, 2, 3].map(function (k) {{
             let row = q.rows[cat * 10 + k];
             return row.visible ? row.answer.openValueNum : undefined;
-        }}).filter(function (v) {{ return v !== undefined; }});
+        }}).filter(function (v) {{ return v !== undefined && v > 0; }});
         for (let i = 1; i < values.length; i++) {{
             if (values[i] < values[i - 1]) {{
                 return error('Проверьте цены: минимальная не должна быть больше средней, а средняя — больше максимальной.');
@@ -1010,7 +1006,7 @@ questions.repeat({n(29)}, {n(29)}, 9129);
 // Q33: один случайный порядок брендов во всех таблицах
 Q{n(33, 0, 1)}.rows.randomize();
 let order = Q{n(33, 0, 1)}.rows.getCodes();
-for (let qn of [{n(33, 0, 2)}, {n(33, 0, 3)}, {n(33, 0, 4)}, {n(33, 0, 5)}]) questions[qn].rows.setOrder(order);
+for (let qn of [{n(33, 0, 2)}, {n(33, 0, 3)}]) questions[qn].rows.setOrder(order);
 '''
 
 qnr.save(os.path.join(HERE, 'hcp_perception_ru.json'))
