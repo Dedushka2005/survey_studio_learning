@@ -83,9 +83,11 @@ class Questionnaire:
         self.name = name
         self.screen_text = screen_text
         self.refuse_text = refuse_text
-        self.questionnaire_flags = {'AddSubstitutionsToTemplates': True}
+        # по умолчанию: автоформирование имён переменных и новый сервис опросов («Запускать опрос в новой веб-дате»)
+        self.questionnaire_flags = {'AddSubstitutionsToTemplates': True, 'RunInNewService': True}
         self.questionnaire_flags.update(questionnaire_flags or {})
-        self.survey_flags = {'HideQuestionNumbers': True, 'HideAnswerCodes': True}
+        # номера вопросов показываем, коды ответов скрываем
+        self.survey_flags = {'HideQuestionNumbers': False, 'HideAnswerCodes': True}
         self.survey_flags.update(survey_flags or {})
         self.global_functions = ''   # функции конкретной анкеты (добавляются после общих)
         self.preprocessing = ''      # скрипт «Подготовка»
@@ -169,7 +171,43 @@ class Questionnaire:
                 data[key] = value.strip()
         data['Questions'] = self.questions
         data['AnswerLists'] = list(self.answer_lists.values())
+        self.resolve_macros(data)
         return data
+
+    @staticmethod
+    def resolve_macros(data):
+        """Подстановки {ИМЯ.96T} -> {Q<номер>.96T}.
+
+        SURVEYSTUDIO понимает в подстановках только системный номер вопроса ({Q12100.96T}), а не имя шаблона
+        (подтверждено на тесте). В текстах можно писать имя — здесь оно заменяется на номер.
+        Ссылка {Q<номер>…} на несуществующий вопрос — ошибка.
+        """
+        import re
+        by_name = {x['OutputColumnTemplate']: x['Number'] for x in data['Questions']
+                   if x.get('OutputColumnTemplate') and '{' not in x['OutputColumnTemplate']}
+        numbers = {x['Number'] for x in data['Questions']}
+        problems = []
+
+        def fix(text, where):
+            def repl(m):
+                name, rest = m.group(1), m.group(2) or ''
+                if name in by_name:
+                    return '{Q%d%s}' % (by_name[name], rest)
+                num = re.fullmatch(r'Q(\d+)', name)
+                if num and int(num.group(1)) not in numbers:
+                    problems.append(f'{where}: подстановка {{{name}{rest}}} — нет такого вопроса')
+                return m.group(0)
+            return re.sub(r'\{([A-Za-z]\w*)((?:\.[0-9A-Za-z]+)*)\}', repl, text)
+
+        for x in data['Questions']:
+            for key in ('Text', 'Comment'):
+                if x.get(key):
+                    x[key] = fix(x[key], f"Q{x['Number']} {key}")
+        for lst in data['AnswerLists']:
+            for item in lst['AnswerItems']:
+                if item.get('Text'):
+                    item['Text'] = fix(item['Text'], f"список «{lst['Name']}»")
+        assert not problems, '\n'.join(problems)
 
     def validate(self, data):
         numbers = [x['Number'] for x in data['Questions']]

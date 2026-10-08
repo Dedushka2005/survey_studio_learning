@@ -4,19 +4,20 @@
   "Name": "Allergan Aesthetics HCP Perception RU (тест)",
   "ExportedQuestionnaireFlags": {
     "AddSubstitutionsToTemplates": true,
+    "RunInNewService": true,
     "GenerateQuestionVariableByTemplate": true
   },
   "ExportedSurveyFlags": {
-    "HideQuestionNumbers": true,
+    "HideQuestionNumbers": false,
     "HideAnswerCodes": true
   },
-  "ScriptGlobalFunctions": "// ============================================================================\n// Общая библиотека функций для анкет SURVEYSTUDIO\n// Вставляется в раздел «Функции» анкеты генератором (tools/ss_builder.py).\n// Тексты \"Благодарим вас за уделенное время! К сожалению, по условиям исследования вы не можете принять в нем участие.\" и \"Благодарим вас за уделенное время! До свидания.\" подставляются при сборке.\n// ============================================================================\n\n// Скринаут с результатом «Скрининг» (не подходит по критериям отбора).\n// Использование в скрипте после ответа: if (Q.isChecked(3)) return screenOut();\nfunction screenOut() {\n    return exitWithResult(InterviewResult.Screening, \"Благодарим вас за уделенное время! К сожалению, по условиям исследования вы не можете принять в нем участие.\");\n}\n\n// Отказ от участия с результатом «Завершено».\nfunction refuseOut() {\n    return exitWithResult(InterviewResult.Exited, \"Благодарим вас за уделенное время! До свидания.\");\n}\n\n// Число в строке табличного числового вопроса (0, если строка скрыта или пуста).\nfunction numRow(q, code) {\n    let row = q.rows[code];\n    if (row === undefined || !row.visible) return 0;\n    let v = row.answer.openValueNum;\n    return v === undefined ? 0 : v;\n}\n\n// Сумма чисел во всех видимых строках табличного числового вопроса.\nfunction sumRows(q) {\n    let total = 0;\n    for (let code of q.rows.getCodes()) total += numRow(q, code);\n    return total;\n}\n\n// Показать только строки, для кодов которых predicate(code) вернул true.\n// Пример: showRowsWhere(Q, function (code) { return numRow(Q10, code) > 0; });\nfunction showRowsWhere(q, predicate) {\n    q.rows.hideAll();\n    for (let code of q.rows.getCodes()) {\n        if (predicate(code)) q.rows.show(code);\n    }\n}\n\n// Показать только варианты ответа, для кодов которых predicate(code) вернул true.\nfunction showAnswersWhere(q, predicate) {\n    q.answers.hideAll();\n    for (let code of q.answers.getCodes()) {\n        if (predicate(code)) q.answers.show(code);\n    }\n}\n\n// Строка «Другое» числовой таблицы: если указано число > 0 — требовать уточнение текста,\n// если вписан текст — требовать число. Строку можно сделать необязательной флагом CustomRowValidation.\n// Использование в скрипте после ответа: return requireRowText(Q, 98);\nfunction requireRowText(q, code) {\n    let row = q.rows[code];\n    if (row === undefined || !row.visible) return ok;\n    let v = row.answer.openValueNum;\n    if (v !== undefined && v > 0 && !row.openValueTxt) {\n        return error('Пожалуйста, уточните вариант «' + row.plainText + '»');\n    }\n    if (row.openValueTxt && v === undefined) {\n        return error('Пожалуйста, укажите значение для варианта «' + row.plainText + '»');\n    }\n    return ok;\n}\n\n// Подставить текст «Другое» из строки вопроса src в текст строки вопроса dst.\nfunction copyOtherText(src, dst, code) {\n    if (dst.rows[code] === undefined || src.rows[code] === undefined) return;\n    let txt = src.rows[code].openValueTxt;\n    dst.rows[code].text = txt ? 'Другое: ' + txt : 'Другое';\n}\n\n// Текст выбранных ответов через запятую (для «другого» — вписанный текст).\nfunction checkedText(q) {\n    let parts = [];\n    for (let a of q.getChecked()) {\n        parts.push(a.settings.openValueTxt && a.openValueTxt ? a.openValueTxt : a.plainText);\n    }\n    return parts.join(', ');\n}\n\n// ---------------------------------------------------------------------------\n// Автоответ, если после фильтра остался один вариант (приём из анкеты пользователя)\n// Использовать только там, где единственный вариант — логически вынужденный ответ\n// («чаще всего» из одного регулярно назначаемого, ранжирование одной компании и т.п.).\n// ---------------------------------------------------------------------------\n\n// Вопрос с выбором: один видимый вариант — отметить и не показывать; ни одного — пропустить.\n// Использование в скрипте перед показом:\n//   Q.showOnly(Q23.getCheckedCodes());\n//   return autoAnswerIfSingle(Q);\nfunction autoAnswerIfSingle(q) {\n    let codes = q.answers.getVisibleCodes();\n    if (codes.length === 1) {\n        q[codes[0]].checked = true;\n        return answered;\n    }\n    return codes.length > 0 ? ok : skip;\n}\n\n// Числовая таблица (доли, сумма = total): одна видимая строка — вписать total и не показывать.\n// Использование: showRowsWhere(Q, …); return autoFillIfSingle(Q, 100);\nfunction autoFillIfSingle(q, total) {\n    let codes = q.rows.getVisibleCodes();\n    if (codes.length === 1) {\n        q.rows[codes[0]].answer.openValueNum = total;\n        return answered;\n    }\n    return codes.length > 0 ? ok : skip;\n}\n\n// Проверка суммы видимых строк числовой таблицы (скрипт после ответа).\n// Использование: return requireSum(Q, 100);  или  return requireSum(Q, Q16.openValueInt);\nfunction requireSum(q, target) {\n    let total = +sumRows(q).toFixed(2);\n    if (total !== target) {\n        return error('Сумма значений должна быть равна ' + target + '. Сейчас: ' + total + '.');\n    }\n    return ok;\n}\n\n// Выделить строку таблицы красным и вернуть ошибку (скрипт после ответа).\n// Перед проверками вызвать resetRowMarks(Q), чтобы снять старые выделения.\n//   resetRowMarks(Q);\n//   if (…) return rowError(Q, code, 'Ранее вы сказали, что …');\nfunction rowError(q, code, message) {\n    q.rows[code].text = '<font color=\"red\"><b>' + q.rows[code].plainText + '</b></font>';\n    return error(message);\n}\n\nfunction resetRowMarks(q) {\n    for (let row of q.rows.getVisible()) row.text = row.plainText;\n}\n\n// Строка «Другое» таблицы с выбором (необязательная строка с полем для текста):\n// вписан текст — нужен ответ в строке; есть ответ — нужен текст.\n// Использование в скрипте после ответа: return requireChoiceRowText(Q, 96);\nfunction requireChoiceRowText(q, code) {\n    let row = q.rows[code];\n    if (row === undefined || !row.visible) return ok;\n    let answered = row.getCheckedCodes().length > 0;\n    if (row.openValueTxt && !answered) {\n        return error('Пожалуйста, дайте ответ в строке «' + row.plainText + '»');\n    }\n    if (answered && !row.openValueTxt) {\n        return error('Пожалуйста, уточните вариант «' + row.plainText + '»');\n    }\n    return ok;\n}\n\n// Нестрогая проверка: при первом «Далее» показать предупреждение, при повторном нажатии\n// с теми же ответами — пропустить. Если ответ изменили и условие снова выполняется — предупредить снова.\n// Использование в скрипте после ответа:\n//   return softWarning(Q, Q.rows.getVisible().some(r => r.answer.openValueNum > 12),\n//                      'Вы указали больше 12. Проверьте, пожалуйста, верно ли указано число.');\nfunction softWarning(q, condition, message) {\n    if (isPostProcessing() || isValidation()) return ok;\n    let key = 'softWarning_' + q.number;\n    if (!condition) { V[key] = ''; return ok; }\n    let signature = answerSignature(q);\n    if (V[key] === signature) return ok;\n    V[key] = signature;\n    return error(message);\n}\n\n// Строка-«слепок» ответа на вопрос (для softWarning): числа/тексты строк, открытые значения, коды.\nfunction answerSignature(q) {\n    let parts = [];\n    try {\n        for (let row of q.rows.getVisible()) {\n            parts.push(row.code + ':' + row.answer.openValueNum + ':' + row.answer.openValueTxt + ':' + row.openValueTxt);\n        }\n    } catch (e) { }\n    try { parts.push(String(q.openValueNum) + ':' + String(q.openValueTxt)); } catch (e) { }\n    try { parts.push(q.getCheckedCodes().join(',')); } catch (e) { }\n    return parts.join('|');\n}\n\n// ❌ УСТАРЕЛО: SURVEYSTUDIO не умеет фильтровать варианты в «Таблица: выпадающий список» (ответ поддержки).\n// Оставлено только для совместимости со старой анкетой Aesthetics RU. В новых анкетах не использовать.\nfunction filterDropdown(q, codes) {\n    if (codes.length === 0) return;\n    let isDropdownList = function (list) {\n        return list !== undefined && list.getCodes().indexOf(900) === -1 && list.count > 1;\n    };\n    try {\n        if (isDropdownList(q.answers)) { q.answers.showOnly(codes); return; }\n    } catch (e) { }\n    for (let row of q.rows.getAll()) {\n        try {\n            if (isDropdownList(row.answers)) row.answers.showOnly(codes);\n        } catch (e) { }\n    }\n}\n\n// Найти в тексте упоминания по словарю синонимов { код: ['вариант1', 'вариант2'] }.\n// Регистр, пробелы и знаки препинания не учитываются. Возвращает массив кодов.\nfunction findByAliases(text, aliases, codes) {\n    let norm = String(text).toLowerCase().replace(/ё/g, 'е').replace(/[^a-zа-я0-9]/g, '');\n    let found = [];\n    for (let code of codes) {\n        let list = aliases[code] || [];\n        for (let a of list) {\n            if (norm.indexOf(a) > -1) { found.push(code); break; }\n        }\n    }\n    return found;\n}\n\n// ===== Функции этой анкеты =====\n\n// Врач проводит процедуры категории (S3 > 0)\nfunction catActive(cat) {\n    return numRow(S3, cat) > 0;\n}\n\n// Вопрос Q7 категории\nfunction q7(cat) {\n    return [null, Q7_1, Q7_2, Q7_3][cat];\n}\n\n// Бренды категории для Q9-Q10: выбранные в Q7 (кроме 97) + Ювидерм в категории 1\nfunction assessedBrands(cat) {\n    let codes = q7(cat).getCheckedCodes().filter(function (code) { return code !== 97; });\n    if (cat === 1 && codes.indexOf(2) === -1) codes.push(2);\n    return codes;\n}\n\n// Название бренда (для «Другое» — текст, вписанный в Q7 категории)\nfunction brandName(cat, code) {\n    let names = {\n        1: \"Belotero / Белотеро\",\n        2: \"Juvederm / Ювидерм\",\n        3: \"Restylane / Рестилайн\",\n        4: \"Teosyal / Теосиаль\",\n        5: \"Stylage / Стилаж\",\n        6: \"Yvoire / Ивор\",\n        7: \"Neuramis / Нейрамис\",\n        8: \"Princess / Принцесс\",\n        9: \"Perfectha / Перфекта\",\n        10: \"Revanesse / Реванесс\",\n        11: \"Sardenya / Сардиния\",\n        12: \"HYAFILIA / ХИАФИЛИЯ\",\n        13: \"Art Filler / Арт филлер\",\n        14: \"Amalain / Амалайн\",\n        15: \"Revofil / Ревофил\",\n        16: \"Revi / Реви\",\n        17: \"Tesoro / Тесоро\",\n        18: \"Novacutan DVS / Новакутан ДВС\",\n        19: \"Profhilo / Профайло\",\n        20: \"Jalupro / Ялупро\",\n        21: \"IAL-System / ИАЛ-Систем\",\n        22: \"Hyalual / Гиалуаль\",\n        23: \"Novacutan / Новакутан\",\n        24: \"Neauvia Hydro / Ньювиа Гидро\",\n        25: \"Plinest / Плинест\",\n        26: \"Radiesse / Радиесс\",\n        27: \"Sculptra / Скульптра\",\n        28: \"AestheFill / Эстефил\",\n        29: \"Juvelook / Джувелук\",\n        30: \"Collost / Коллост\",\n        31: \"SferoGel / СФЕРОгель\",\n        32: \"Renaissance / Ренессанс\",\n        33: \"Novacutan YBio / Новакутан Ю Био\"\n    };\n    if (code === 96) return q7(cat)[96].openValueTxt || 'Другое';\n    return names[code] || '';\n}\n\n// Название компании (для «Иное» — текст, вписанный в Q21)\nfunction companyName(code) {\n    let names = {\n        1: \"Allergan Aesthetics / AbbVie\",\n        2: \"Биомир Сервис\",\n        3: \"BNC Korea\",\n        4: \"Caregen\",\n        5: \"CGBio\",\n        6: \"CHA Meditech\",\n        7: \"CLS International\",\n        8: \"Croma-Pharma\",\n        9: \"Dr. Korman Laboratories\",\n        10: \"Fidia Farmaceutici\",\n        11: \"Galderma\",\n        12: \"IBSA\",\n        13: \"Institute Hyalual\",\n        14: \"Laboratoires Fillmed\",\n        15: \"Laboratoires Vivacy\",\n        16: \"LG Chem\",\n        17: \"Laboratoires Fijie\"\n    };\n    if (code === 96) return Q21[96].openValueTxt || 'Иная компания';\n    return names[code] || '';\n}\n\n// Бренды из Q7 всех категорий (для Q33); «Другое» категории c — код c*100+96\nfunction usedBrands() {\n    let result = [];\n    for (let cat of [1, 2, 3]) {\n        if (!catActive(cat)) continue;\n        for (let code of q7(cat).getCheckedCodes()) {\n            if (code === 97) continue;\n            result.push(code === 96 ? cat * 100 + 96 : code);\n        }\n    }\n    return result;\n}\n\n// Q35/Q36: в каждой категории минимальная <= средняя <= максимальная (0 = «не знаю», не проверяется)\nfunction requireMinAvgMax(q) {\n    for (let cat of [1, 2, 3]) {\n        let values = [1, 2, 3].map(function (k) {\n            let row = q.rows[cat * 10 + k];\n            return row.visible ? row.answer.openValueNum : undefined;\n        }).filter(function (v) { return v !== undefined && v > 0; });\n        for (let i = 1; i < values.length; i++) {\n            if (values[i] < values[i - 1]) {\n                return error('Проверьте цены: минимальная не должна быть больше средней, а средняя — больше максимальной.');\n            }\n        }\n    }\n    return ok;\n}",
-  "ScriptPreProcessing": "// Таблицы: строки в случайном порядке (флаг рандомизации у таблицы не ставим — он может перемешать и шкалу).\n// Строки с флагом «Не подлежит рандомизации» остаются на месте.\nfor (let qn of [10100, 10810, 10820, 10830, 11010, 11020, 11030, 12300]) {\n    questions[qn].rows.randomize();\n}\n\n// Q3: категории в случайном порядке\nquestions.randomize([10310, 10320, 10330]);\n\n// Раздел 2: циклы Q11 по брендам с ростом использования (внутри блока своей категории)\nquestions.repeat(11110, 11110, 9111);\nquestions.repeat(11120, 11120, 9112);\nquestions.repeat(11130, 11130, 9113);\n// Раздел 2: блоки категорий Q7-Q13 в случайном порядке\nquestions.randomizeGroups([[10710, 11310], [10720, 11320], [10730, 11330]]);\n\n// Раздел 4: циклы по компаниям (Q29 — компании в случайном порядке)\nquestions.repeat(12300, 12400, 9123);\nQ9129.answers.randomize();\nquestions.repeat(12900, 12900, 9129);\n\n// Q33: один случайный порядок брендов во всех таблицах\nQ13301.rows.randomize();\nlet order = Q13301.rows.getCodes();\nfor (let qn of [13302, 13303]) questions[qn].rows.setOrder(order);",
+  "ScriptGlobalFunctions": "// ============================================================================\n// Общая библиотека функций для анкет SURVEYSTUDIO\n// Вставляется в раздел «Функции» анкеты генератором (tools/ss_builder.py).\n// Тексты \"Благодарим вас за уделенное время! К сожалению, по условиям исследования вы не можете принять в нем участие.\" и \"Благодарим вас за уделенное время! До свидания.\" подставляются при сборке.\n// ============================================================================\n\n// Скринаут с результатом «Скрининг» (не подходит по критериям отбора).\n// Использование в скрипте после ответа: if (Q.isChecked(3)) return screenOut();\nfunction screenOut() {\n    return exitWithResult(InterviewResult.Screening, \"Благодарим вас за уделенное время! К сожалению, по условиям исследования вы не можете принять в нем участие.\");\n}\n\n// Отказ от участия с результатом «Завершено».\nfunction refuseOut() {\n    return exitWithResult(InterviewResult.Exited, \"Благодарим вас за уделенное время! До свидания.\");\n}\n\n// Число в строке табличного числового вопроса (0, если строка скрыта или пуста).\nfunction numRow(q, code) {\n    let row = q.rows[code];\n    if (row === undefined || !row.visible) return 0;\n    let v = row.answer.openValueNum;\n    return v === undefined ? 0 : v;\n}\n\n// Сумма чисел во всех видимых строках табличного числового вопроса.\nfunction sumRows(q) {\n    let total = 0;\n    for (let code of q.rows.getCodes()) total += numRow(q, code);\n    return total;\n}\n\n// Показать только строки, для кодов которых predicate(code) вернул true.\n// Пример: showRowsWhere(Q, function (code) { return numRow(Q10, code) > 0; });\nfunction showRowsWhere(q, predicate) {\n    q.rows.hideAll();\n    for (let code of q.rows.getCodes()) {\n        if (predicate(code)) q.rows.show(code);\n    }\n}\n\n// Показать только варианты ответа, для кодов которых predicate(code) вернул true.\nfunction showAnswersWhere(q, predicate) {\n    q.answers.hideAll();\n    for (let code of q.answers.getCodes()) {\n        if (predicate(code)) q.answers.show(code);\n    }\n}\n\n// Строка «Другое» числовой таблицы: если указано число > 0 — требовать уточнение текста,\n// если вписан текст — требовать число. Строку можно сделать необязательной флагом CustomRowValidation.\n// Использование в скрипте после ответа: return requireRowText(Q, 98);\nfunction requireRowText(q, code) {\n    let row = q.rows[code];\n    if (row === undefined || !row.visible) return ok;\n    let v = row.answer.openValueNum;\n    if (v !== undefined && v > 0 && !row.openValueTxt) {\n        return error('Пожалуйста, уточните вариант «' + row.plainText + '»');\n    }\n    if (row.openValueTxt && v === undefined) {\n        return error('Пожалуйста, укажите значение для варианта «' + row.plainText + '»');\n    }\n    return ok;\n}\n\n// Подставить текст «Другое» из строки вопроса src в текст строки вопроса dst.\nfunction copyOtherText(src, dst, code) {\n    if (dst.rows[code] === undefined || src.rows[code] === undefined) return;\n    let txt = src.rows[code].openValueTxt;\n    dst.rows[code].text = txt ? 'Другое: ' + txt : 'Другое';\n}\n\n// Текст выбранных ответов через запятую (для «другого» — вписанный текст).\nfunction checkedText(q) {\n    let parts = [];\n    for (let a of q.getChecked()) {\n        parts.push(a.settings.openValueTxt && a.openValueTxt ? a.openValueTxt : a.plainText);\n    }\n    return parts.join(', ');\n}\n\n// ---------------------------------------------------------------------------\n// Автоответ, если после фильтра остался один вариант (приём из анкеты пользователя)\n// Использовать только там, где единственный вариант — логически вынужденный ответ\n// («чаще всего» из одного регулярно назначаемого, ранжирование одной компании и т.п.).\n// ---------------------------------------------------------------------------\n\n// Вопрос с выбором: один видимый вариант — отметить и не показывать; ни одного — пропустить.\n// Использование в скрипте перед показом:\n//   Q.showOnly(Q23.getCheckedCodes());\n//   return autoAnswerIfSingle(Q);\nfunction autoAnswerIfSingle(q) {\n    let codes = q.answers.getVisibleCodes();\n    if (codes.length === 1) {\n        q[codes[0]].checked = true;\n        return answered;\n    }\n    return codes.length > 0 ? ok : skip;\n}\n\n// Числовая таблица (доли, сумма = total): одна видимая строка — вписать total и не показывать.\n// Использование: showRowsWhere(Q, …); return autoFillIfSingle(Q, 100);\nfunction autoFillIfSingle(q, total) {\n    let codes = q.rows.getVisibleCodes();\n    if (codes.length === 1) {\n        q.rows[codes[0]].answer.openValueNum = total;\n        return answered;\n    }\n    return codes.length > 0 ? ok : skip;\n}\n\n// Проверка суммы видимых строк числовой таблицы (скрипт после ответа).\n// Использование: return requireSum(Q, 100);  или  return requireSum(Q, Q16.openValueInt);\nfunction requireSum(q, target) {\n    let total = +sumRows(q).toFixed(2);\n    if (total !== target) {\n        return error('Сумма значений должна быть равна ' + target + '. Сейчас: ' + total + '.');\n    }\n    return ok;\n}\n\n// Выделить строку таблицы красным и вернуть ошибку (скрипт после ответа).\n// Перед проверками вызвать resetRowMarks(Q), чтобы снять старые выделения.\n//   resetRowMarks(Q);\n//   if (…) return rowError(Q, code, 'Ранее вы сказали, что …');\nfunction rowError(q, code, message) {\n    q.rows[code].text = '<font color=\"red\"><b>' + q.rows[code].plainText + '</b></font>';\n    return error(message);\n}\n\nfunction resetRowMarks(q) {\n    for (let row of q.rows.getVisible()) row.text = row.plainText;\n}\n\n// Строка «Другое» таблицы с выбором (необязательная строка с полем для текста):\n// вписан текст — нужен ответ в строке; есть ответ — нужен текст.\n// Использование в скрипте после ответа: return requireChoiceRowText(Q, 96);\nfunction requireChoiceRowText(q, code) {\n    let row = q.rows[code];\n    if (row === undefined || !row.visible) return ok;\n    let answered = row.getCheckedCodes().length > 0;\n    if (row.openValueTxt && !answered) {\n        return error('Пожалуйста, дайте ответ в строке «' + row.plainText + '»');\n    }\n    if (answered && !row.openValueTxt) {\n        return error('Пожалуйста, уточните вариант «' + row.plainText + '»');\n    }\n    return ok;\n}\n\n// Нестрогая проверка: при первом «Далее» показать предупреждение, при повторном нажатии\n// с теми же ответами — пропустить. Если ответ изменили и условие снова выполняется — предупредить снова.\n// Использование в скрипте после ответа:\n//   return softWarning(Q, Q.rows.getVisible().some(r => r.answer.openValueNum > 12),\n//                      'Вы указали больше 12. Проверьте, пожалуйста, верно ли указано число.');\nfunction softWarning(q, condition, message) {\n    if (isPostProcessing() || isValidation()) return ok;\n    let key = 'softWarning_' + q.number;\n    if (!condition) { V[key] = ''; return ok; }\n    let signature = answerSignature(q);\n    if (V[key] === signature) return ok;\n    V[key] = signature;\n    return error(message);\n}\n\n// Строка-«слепок» ответа на вопрос (для softWarning): числа/тексты строк, открытые значения, коды.\nfunction answerSignature(q) {\n    let parts = [];\n    try {\n        for (let row of q.rows.getVisible()) {\n            parts.push(row.code + ':' + row.answer.openValueNum + ':' + row.answer.openValueTxt + ':' + row.openValueTxt);\n        }\n    } catch (e) { }\n    try { parts.push(String(q.openValueNum) + ':' + String(q.openValueTxt)); } catch (e) { }\n    try { parts.push(q.getCheckedCodes().join(',')); } catch (e) { }\n    return parts.join('|');\n}\n\n// ❌ УСТАРЕЛО: SURVEYSTUDIO не умеет фильтровать варианты в «Таблица: выпадающий список» (ответ поддержки).\n// Оставлено только для совместимости со старой анкетой Aesthetics RU. В новых анкетах не использовать.\nfunction filterDropdown(q, codes) {\n    if (codes.length === 0) return;\n    let isDropdownList = function (list) {\n        return list !== undefined && list.getCodes().indexOf(900) === -1 && list.count > 1;\n    };\n    try {\n        if (isDropdownList(q.answers)) { q.answers.showOnly(codes); return; }\n    } catch (e) { }\n    for (let row of q.rows.getAll()) {\n        try {\n            if (isDropdownList(row.answers)) row.answers.showOnly(codes);\n        } catch (e) { }\n    }\n}\n\n// Найти в тексте упоминания по словарю синонимов { код: ['вариант1', 'вариант2'] }.\n// Регистр, пробелы и знаки препинания не учитываются. Возвращает массив кодов.\nfunction findByAliases(text, aliases, codes) {\n    let norm = String(text).toLowerCase().replace(/ё/g, 'е').replace(/[^a-zа-я0-9]/g, '');\n    let found = [];\n    for (let code of codes) {\n        let list = aliases[code] || [];\n        for (let a of list) {\n            if (norm.indexOf(a) > -1) { found.push(code); break; }\n        }\n    }\n    return found;\n}\n\n// ===== Функции этой анкеты =====\n\n// Врач проводит процедуры категории (S3 > 0)\nfunction catActive(cat) {\n    return numRow(S3, cat) > 0;\n}\n\n// Вопрос Q7 категории\nfunction q7(cat) {\n    return [null, Q7_1, Q7_2, Q7_3][cat];\n}\n\n// Бренды категории для Q9-Q10: выбранные в Q7 (кроме 97) + Ювидерм в категории 1\nfunction assessedBrands(cat) {\n    let codes = q7(cat).getCheckedCodes().filter(function (code) { return code !== 97; });\n    if (cat === 1 && codes.indexOf(2) === -1) codes.push(2);\n    return codes;\n}\n\n// Название бренда (для «Другое» — текст, вписанный в Q7 категории)\nfunction brandName(cat, code) {\n    let names = {\n        1: \"Belotero / Белотеро\",\n        2: \"Juvederm / Ювидерм\",\n        3: \"Restylane / Рестилайн\",\n        4: \"Teosyal / Теосиаль\",\n        5: \"Stylage / Стилаж\",\n        6: \"Yvoire / Ивор\",\n        7: \"Neuramis / Нейрамис\",\n        8: \"Princess / Принцесс\",\n        9: \"Perfectha / Перфекта\",\n        10: \"Revanesse / Реванесс\",\n        11: \"Sardenya / Сардиния\",\n        12: \"HYAFILIA / ХИАФИЛИЯ\",\n        13: \"Art Filler / Арт филлер\",\n        14: \"Amalain / Амалайн\",\n        15: \"Revofil / Ревофил\",\n        16: \"Revi / Реви\",\n        17: \"Tesoro / Тесоро\",\n        18: \"Novacutan DVS / Новакутан ДВС\",\n        19: \"Profhilo / Профайло\",\n        20: \"Jalupro / Ялупро\",\n        21: \"IAL-System / ИАЛ-Систем\",\n        22: \"Hyalual / Гиалуаль\",\n        23: \"Novacutan / Новакутан\",\n        24: \"Neauvia Hydro / Ньювиа Гидро\",\n        25: \"Plinest / Плинест\",\n        26: \"Radiesse / Радиесс\",\n        27: \"Sculptra / Скульптра\",\n        28: \"AestheFill / Эстефил\",\n        29: \"Juvelook / Джувелук\",\n        30: \"Collost / Коллост\",\n        31: \"SferoGel / СФЕРОгель\",\n        32: \"Renaissance / Ренессанс\",\n        33: \"Novacutan YBio / Новакутан Ю Био\"\n    };\n    if (code === 96) return q7(cat)[96].openValueTxt || 'Другое';\n    return names[code] || '';\n}\n\n// Название компании (для «Иное» — текст, вписанный в Q21)\nfunction companyName(code) {\n    let names = {\n        1: \"Allergan Aesthetics / AbbVie\",\n        2: \"Биомир Сервис\",\n        3: \"BNC Korea\",\n        4: \"Caregen\",\n        5: \"CGBio\",\n        6: \"CHA Meditech\",\n        7: \"CLS International\",\n        8: \"Croma-Pharma\",\n        9: \"Dr. Korman Laboratories\",\n        10: \"Fidia Farmaceutici\",\n        11: \"Galderma\",\n        12: \"IBSA\",\n        13: \"Institute Hyalual\",\n        14: \"Laboratoires Fillmed\",\n        15: \"Laboratoires Vivacy\",\n        16: \"LG Chem\",\n        17: \"Laboratoires Fijie\"\n    };\n    if (code === 96) return Q21[96].openValueTxt || 'Иная компания';\n    return names[code] || '';\n}\n\n// Q35/Q36: в каждой категории минимальная <= средняя <= максимальная (0 = «не знаю», не проверяется)\nfunction requireMinAvgMax(q) {\n    for (let cat of [1, 2, 3]) {\n        let values = [1, 2, 3].map(function (k) {\n            let row = q.rows[cat * 10 + k];\n            return row.visible ? row.answer.openValueNum : undefined;\n        }).filter(function (v) { return v !== undefined && v > 0; });\n        for (let i = 1; i < values.length; i++) {\n            if (values[i] < values[i - 1]) {\n                return error('Проверьте цены: минимальная не должна быть больше средней, а средняя — больше максимальной.');\n            }\n        }\n    }\n    return ok;\n}",
+  "ScriptPreProcessing": "// Таблицы: строки в случайном порядке (флаг рандомизации у таблицы не ставим — он может перемешать и шкалу).\n// Строки с флагом «Не подлежит рандомизации» остаются на месте.\nfor (let qn of [10100, 10810, 10820, 10830, 11010, 11020, 11030, 12300]) {\n    questions[qn].rows.randomize();\n}\n\n// Q3: категории в случайном порядке\nquestions.randomize([10310, 10320, 10330]);\n\n// Раздел 2: циклы Q11 по брендам с ростом использования (внутри блока своей категории)\nquestions.repeat(11110, 11110, 9111);\nquestions.repeat(11120, 11120, 9112);\nquestions.repeat(11130, 11130, 9113);\n// Раздел 2: блоки категорий Q7-Q13 в случайном порядке\nquestions.randomizeGroups([[10710, 11310], [10720, 11320], [10730, 11330]]);\n\n// Раздел 4: циклы по компаниям (Q29 — компании в случайном порядке)\nquestions.repeat(12300, 12400, 9123);\nQ9129.answers.randomize();\nquestions.repeat(12900, 12900, 9129);\n\n// Q33: в каждой категории один случайный порядок брендов во всех трёх таблицах\nfor (let c of [1, 2, 3]) {\n    let pack = questions[13300 + c * 10 + 1];\n    pack.rows.randomize();\n    let order = pack.rows.getCodes();\n    questions[13300 + c * 10 + 2].rows.setOrder(order);\n    questions[13300 + c * 10 + 3].rows.setOrder(order);\n}",
   "Questions": [
     {
       "OrderIdx": 1,
       "Number": 100,
-      "Text": "<p>Добрый день! Компания IQVIA специализируется на передовой аналитике в сфере здравоохранения.</p><p>Мы проводим исследование рынка от имени фармацевтической компании с целью оценки динамики рынка дермальных филлеров (для целей формирования объема и лифтинга), увлажнения кожи и биостимуляторов в России. Мы хотели бы пригласить Вас к участию в данном исследовании, на которое потребуется около 40 минут.</p><p>Название медицинской/фармацевтической компании-заказчика в рамках данного исследования раскрыто не будет.</p><p><b>Желаете ли Вы продолжить?</b></p>",
+      "Text": "<p>Добрый день! Компания <b>IQVIA</b> специализируется на передовой аналитике в сфере здравоохранения.</p><p>Мы проводим исследование рынка от имени фармацевтической компании с целью <b>оценки динамики рынка дермальных филлеров (для целей формирования объема и лифтинга), увлажнения кожи и биостимуляторов в России</b>. Мы хотели бы пригласить Вас к участию в данном исследовании, на которое потребуется около <b>40 минут</b>.</p><p>Название медицинской/фармацевтической компании-заказчика в рамках данного исследования раскрыто не будет.</p><p><b>Желаете ли Вы продолжить?</b></p>",
       "QuestionType": "SingleChoice",
       "ExportedQuestionFlags": {},
       "ExportedSurveyFlags": {},
@@ -27,7 +28,7 @@
     {
       "OrderIdx": 2,
       "Number": 101,
-      "Text": "<p>Перед тем как перейти к основной части опроса, мы зададим Вам несколько отборочных вопросов, чтобы убедиться, что Вы можете принимать участие в данном опросе.</p><p>Укажите Вашу основную специальность.</p>",
+      "Text": "<p><b>Перед тем как перейти к основной части опроса, мы зададим Вам несколько отборочных вопросов, чтобы убедиться, что Вы можете принимать участие в данном опросе.</b></p><p>Укажите Вашу <u>основную</u> специальность.</p>",
       "QuestionType": "SingleChoice",
       "ExportedQuestionFlags": {},
       "ExportedSurveyFlags": {},
@@ -38,7 +39,7 @@
     {
       "OrderIdx": 3,
       "Number": 102,
-      "Text": "Скажите, пожалуйста, есть ли у Вас высшее медицинское образование?",
+      "Text": "Скажите, пожалуйста, есть ли у Вас <u>высшее медицинское</u> образование?",
       "QuestionType": "SingleChoice",
       "ExportedQuestionFlags": {},
       "ExportedSurveyFlags": {},
@@ -71,12 +72,12 @@
     {
       "OrderIdx": 6,
       "Number": 105,
-      "Text": "Сколько всего инъекционных процедур Вы лично проводите <b>в среднем в месяц</b> в каждой из категорий?",
+      "Text": "<p>Сколько всего инъекционных процедур Вы лично проводите в среднем в месяц в каждой из категорий?</p><p><i>Примечание: все упомянутые торговые марки являются собственностью соответствующих владельцев и приведены исключительно в исследовательских и идентификационных целях.</i></p>",
       "QuestionType": "Table_Numeric",
       "ExportedQuestionFlags": {},
       "ExportedSurveyFlags": {},
       "OutputColumnTemplate": "S3",
-      "Comment": "Если не проводите — укажите 0. Примечание: ГК означает гиалуроновая кислота.<br>Примечание: все упомянутые торговые марки являются собственностью соответствующих владельцев и приведены исключительно в исследовательских и идентификационных целях.",
+      "Comment": "Если не проводите — укажите 0. Примечание: ГК означает гиалуроновая кислота.",
       "ScriptAfterAnswer": "if (sumRows(Q) < 15) return screenOut();",
       "RowList": "Категории S3",
       "AnswerNumberFrom": 0,
@@ -154,7 +155,7 @@
     {
       "OrderIdx": 13,
       "Number": 112,
-      "Text": "<p>Цель данного исследования – обсудить и понять текущие подходы к использованию препаратов для эстетической медицины. Опрос займет около 40 минут.</p><p>Заверяем Вас в том, что данное исследование рынка проводится в соответствии с международными принципами проведения исследований рынка. Данное исследование не преследует цель продвижения чего-либо. Мы не пытаемся Вам что-либо продать. Вся предоставленная Вами информация будет рассматриваться в режиме строжайшей конфиденциальности, а любые данные будут представлены в обобщенной форме – отчеты, предоставляемые фармацевтической компании, которая заказала данное исследование, или ее аффилированным компаниям, не будут содержать никаких личных данных (включая Ваше имя, адрес электронной почты и телефонный номер).</p><p><b>Исходя из этой информации, согласны ли Вы принять участие в таком исследовании рынка?</b></p>",
+      "Text": "<p>Цель данного исследования – <b>обсудить и понять текущие подходы к использованию препаратов для эстетической медицины</b>. Опрос займет около <b>40 минут</b>.</p><p>Заверяем Вас в том, что данное исследование рынка проводится в соответствии с международными принципами проведения исследований рынка. Данное исследование не преследует цель продвижения чего-либо. Мы не пытаемся Вам что-либо продать. Вся предоставленная Вами информация будет рассматриваться в режиме строжайшей конфиденциальности, а любые данные будут представлены в обобщенной форме – отчеты, предоставляемые фармацевтической компании, которая заказала данное исследование, или ее аффилированным компаниям, не будут содержать никаких личных данных (включая Ваше имя, адрес электронной почты и телефонный номер).</p><p><b>Исходя из этой информации, согласны ли Вы принять участие в таком исследовании рынка?</b></p>",
       "QuestionType": "SingleChoice",
       "ExportedQuestionFlags": {},
       "ExportedSurveyFlags": {},
@@ -185,7 +186,7 @@
     {
       "OrderIdx": 16,
       "Number": 115,
-      "Text": "<p><b>Согласие респондента на обработку персональных данных</b></p><p>Настоящим даю свое согласие на обработку моих персональных данных, в том числе указанных выше, свободно, без оговорок, по своей воле и в своих интересах на следующих условиях:</p><ul><li>настоящее согласие дано оператору: ТОО «АЙКЬЮВИА Солюшнс Казахстан» с целью добавления моих персональных данных в базу данных оператора, служащую инструментом коммуникации (в том числе направление мне информационных сообщений, совершение информационных звонков), осуществления коммуникации со мной (направление информационных сообщений, в том числе научного и образовательного характера, и осуществления информационных звонков), приглашения к участию в конференциях и исследованиях, оформления подписки на специализированные издания, а также мониторинга безопасности лекарственных препаратов;</li><li>в перечень действий с персональными данными входит: сбор, запись, систематизация, накопление, хранение, уточнение (обновление, изменение), извлечение, использование, обезличивание, блокирование, удаление, уничтожение как с использованием средств автоматизации, так и без использования таких средств;</li><li>разрешена передача моих персональных данных третьим лицам, а именно юридическим лицам/компаниям, являющимся представителями фармацевтического рынка (производители и дистрибьюторы лекарственных средств, производители и дистрибьюторы медицинских изделий, производители и дистрибьюторы косметической продукции, производители и дистрибьюторы БАД), юридическим лицам/компаниям, индивидуальным предпринимателям, физическим лицам, осуществляющим маркетинговые исследования в области медицины/фармакологии (опросы, интервью, фокус-группы, анкетирование, составление баз данных, предоставление права пользования программным обеспечением и т.д.), в том числе разрешена трансграничная передача персональных данных в страны, обеспечивающие адекватную защиту персональных данных;</li><li>настоящее согласие действует со дня его подписания в течение 50 лет либо до дня отзыва настоящего согласия в письменной форме.</li></ul><p>Правильность указанных мной сведений и согласие на внесение моих персональных данных в базу данных ТОО «АЙКЬЮВИА Солюшнс Казахстан» для целей, названных выше, подтверждаю.</p><p>Настоящим подтверждаю, что лицами, которые проводили опрос, не было совершено по отношению ко мне никаких действий / бездействия, которые могли бы нарушить нормы антикоррупционного законодательства РФ, в т.ч., но не ограничиваясь, нормы Федерального закона № 273-ФЗ «О противодействии коррупции».</p>",
+      "Text": "<p><b><u>Согласие респондента на обработку персональных данных</u></b></p><p>Настоящим даю свое согласие на обработку моих персональных данных, в том числе указанных выше, свободно, без оговорок, по своей воле и в своих интересах на следующих условиях:</p><ul><li>настоящее согласие дано оператору: ТОО «АЙКЬЮВИА Солюшнс Казахстан» с целью добавления моих персональных данных в базу данных оператора, служащую инструментом коммуникации (в том числе направление мне информационных сообщений, совершение информационных звонков), осуществления коммуникации со мной (направление информационных сообщений, в том числе научного и образовательного характера, и осуществления информационных звонков), приглашения к участию в конференциях и исследованиях, оформления подписки на специализированные издания, а также мониторинга безопасности лекарственных препаратов;</li><li>в перечень действий с персональными данными входит: сбор, запись, систематизация, накопление, хранение, уточнение (обновление, изменение), извлечение, использование, обезличивание, блокирование, удаление, уничтожение как с использованием средств автоматизации, так и без использования таких средств;</li><li>разрешена передача моих персональных данных третьим лицам, а именно юридическим лицам/компаниям, являющимся представителями фармацевтического рынка (производители и дистрибьюторы лекарственных средств, производители и дистрибьюторы медицинских изделий, производители и дистрибьюторы косметической продукции, производители и дистрибьюторы БАД), юридическим лицам/компаниям, индивидуальным предпринимателям, физическим лицам, осуществляющим маркетинговые исследования в области медицины/фармакологии (опросы, интервью, фокус-группы, анкетирование, составление баз данных, предоставление права пользования программным обеспечением и т.д.), в том числе разрешена трансграничная передача персональных данных в страны, обеспечивающие адекватную защиту персональных данных;</li><li>настоящее согласие действует со дня его подписания в течение 50 лет либо до дня отзыва настоящего согласия в письменной форме.</li></ul><p>Правильность указанных мной сведений и согласие на внесение моих персональных данных в базу данных ТОО «АЙКЬЮВИА Солюшнс Казахстан» для целей, названных выше, подтверждаю.</p><p>Настоящим подтверждаю, что лицами, которые проводили опрос, не было совершено по отношению ко мне никаких действий / бездействия, которые могли бы нарушить нормы антикоррупционного законодательства РФ, в т.ч., но не ограничиваясь, нормы Федерального закона № 273-ФЗ «О противодействии коррупции».</p>",
       "QuestionType": "SingleChoice",
       "ExportedQuestionFlags": {},
       "ExportedSurveyFlags": {},
@@ -195,7 +196,7 @@
     {
       "OrderIdx": 17,
       "Number": 10100,
-      "Text": "<p><b>Раздел 1. Условия практики и процедура принятия решений</b></p><p>При выборе определенного бренда инъекционного филлера для пациента какое влияние имеет каждая из указанных персон на окончательный выбор бренда?</p>",
+      "Text": "<p><b>Раздел 1. Условия практики и процедура принятия решений</b></p><p>При <b>выборе определенного бренда инъекционного филлера</b> для пациента какое влияние имеет каждая из указанных персон на окончательный выбор бренда?</p>",
       "QuestionType": "Table_SingleChoice",
       "ExportedQuestionFlags": {},
       "ExportedSurveyFlags": {},
@@ -207,7 +208,7 @@
     {
       "OrderIdx": 18,
       "Number": 10200,
-      "Text": "Из числа пациентов, получающих дермальные филлеры с ГК и без ГК, примерно какой процент можно отнести к каждой из указанных ниже групп?",
+      "Text": "Из числа пациентов, получающих <b>дермальные филлеры с ГК и без ГК</b>, примерно какой процент можно отнести к каждой из указанных ниже групп?",
       "QuestionType": "Table_Numeric",
       "ExportedQuestionFlags": {},
       "ExportedSurveyFlags": {},
@@ -266,7 +267,7 @@
     {
       "OrderIdx": 22,
       "Number": 10400,
-      "Text": "По каким причинам пациенты в основном запрашивают конкретное наименование филлера?",
+      "Text": "По каким причинам <b>пациенты в основном запрашивают конкретное наименование филлера</b>?",
       "QuestionType": "MultipleChoice",
       "ExportedQuestionFlags": {},
       "ExportedSurveyFlags": {},
@@ -278,7 +279,7 @@
     {
       "OrderIdx": 23,
       "Number": 10500,
-      "Text": "Если рассматривать Ваших пациентов, получающих инъекции дермальных филлеров, примерно какой процент из них Вы бы отнесли к каждой из следующих категорий?",
+      "Text": "Если рассматривать Ваших <b>пациентов, получающих инъекции дермальных филлеров</b>, примерно какой процент из них Вы бы отнесли к каждой из следующих категорий?",
       "QuestionType": "Table_Numeric",
       "ExportedQuestionFlags": {},
       "ExportedSurveyFlags": {},
@@ -302,7 +303,7 @@
     {
       "OrderIdx": 25,
       "Number": 10710,
-      "Text": "<p><b>Раздел 2. Категории брендов и взаимодействие с ними</b></p><p>Категория: <b>Филлеры с ГК – Объем и лифтинг / Контуринг</b></p><p>Какие из указанных ниже брендов Вы использовали <b>наиболее часто</b> за последние 3 месяца?</p>",
+      "Text": "<p><b>Раздел 2. Категории брендов и взаимодействие с ними</b></p><p>Категория: <b>Филлеры с ГК – Объем и лифтинг / Контуринг</b></p><p>Какие из указанных ниже брендов Вы использовали наиболее часто за последние 3 месяца?</p>",
       "QuestionType": "MultipleChoice",
       "ExportedQuestionFlags": {
         "RandomizeAnswers": true
@@ -331,7 +332,7 @@
     {
       "OrderIdx": 27,
       "Number": 10910,
-      "Text": "<p>Категория: <b>Филлеры с ГК – Объем и лифтинг / Контуринг</b></p><p>Какой <b>один</b> бренд у Вас сильнее всего ассоциируется с каждой характеристикой?</p>",
+      "Text": "<p>Категория: <b>Филлеры с ГК – Объем и лифтинг / Контуринг</b></p><p>Какой <b>один бренд у Вас сильнее всего ассоциируется</b> с каждой характеристикой?</p>",
       "QuestionType": "Table_SingleChoice",
       "ExportedQuestionFlags": {},
       "ExportedSurveyFlags": {},
@@ -345,7 +346,7 @@
     {
       "OrderIdx": 28,
       "Number": 11010,
-      "Text": "<p>Категория: <b>Филлеры с ГК – Объем и лифтинг / Контуринг</b></p><p>Как, по Вашим ожиданиям, изменится использование Вами каждого бренда в ближайшие 12 месяцев?</p>",
+      "Text": "<p>Категория: <b>Филлеры с ГК – Объем и лифтинг / Контуринг</b></p><p>Как, <b>по Вашим ожиданиям, изменится использование Вами каждого бренда в ближайшие 12 месяцев</b>?</p>",
       "QuestionType": "Table_SingleChoice",
       "ExportedQuestionFlags": {},
       "ExportedSurveyFlags": {},
@@ -373,7 +374,7 @@
     {
       "OrderIdx": 30,
       "Number": 11110,
-      "Text": "<p>Категория: <b>Филлеры с ГК – Объем и лифтинг / Контуринг</b></p><p>По каким основным причинам Вы ожидаете увеличения использования бренда <b>{Бренд}</b>?</p>",
+      "Text": "<p>Категория: <b>Филлеры с ГК – Объем и лифтинг / Контуринг</b></p><p>По каким основным причинам Вы <b>ожидаете увеличения</b> использования бренда {Бренд}?</p>",
       "QuestionType": "MultipleChoice",
       "ExportedQuestionFlags": {
         "RandomizeAnswers": true
@@ -388,7 +389,7 @@
     {
       "OrderIdx": 31,
       "Number": 11210,
-      "Text": "<p>Категория: <b>Филлеры с ГК – Объем и лифтинг / Контуринг</b></p><p>Какие из указанных ниже брендов Вы <b>не используете</b> в настоящее время, но готовы рассмотреть для использования в ближайшие 12 месяцев?</p>",
+      "Text": "<p>Категория: <b>Филлеры с ГК – Объем и лифтинг / Контуринг</b></p><p>Какие из указанных ниже брендов Вы <b>не используете в настоящее время,</b> но готовы <b>рассмотреть для использования в ближайшие 12 месяцев</b>?</p>",
       "QuestionType": "MultipleChoice",
       "ExportedQuestionFlags": {
         "RandomizeAnswers": true
@@ -419,7 +420,7 @@
     {
       "OrderIdx": 33,
       "Number": 10720,
-      "Text": "<p>Категория: <b>Филлеры с ГК – Увлажнение кожи</b></p><p>Какие из указанных ниже брендов Вы использовали <b>наиболее часто</b> за последние 3 месяца?</p>",
+      "Text": "<p>Категория: <b>Филлеры с ГК – Увлажнение кожи</b></p><p>Какие из указанных ниже брендов Вы использовали наиболее часто за последние 3 месяца?</p>",
       "QuestionType": "MultipleChoice",
       "ExportedQuestionFlags": {
         "RandomizeAnswers": true
@@ -448,7 +449,7 @@
     {
       "OrderIdx": 35,
       "Number": 10920,
-      "Text": "<p>Категория: <b>Филлеры с ГК – Увлажнение кожи</b></p><p>Какой <b>один</b> бренд у Вас сильнее всего ассоциируется с каждой характеристикой?</p>",
+      "Text": "<p>Категория: <b>Филлеры с ГК – Увлажнение кожи</b></p><p>Какой <b>один бренд у Вас сильнее всего ассоциируется</b> с каждой характеристикой?</p>",
       "QuestionType": "Table_SingleChoice",
       "ExportedQuestionFlags": {},
       "ExportedSurveyFlags": {},
@@ -462,7 +463,7 @@
     {
       "OrderIdx": 36,
       "Number": 11020,
-      "Text": "<p>Категория: <b>Филлеры с ГК – Увлажнение кожи</b></p><p>Как, по Вашим ожиданиям, изменится использование Вами каждого бренда в ближайшие 12 месяцев?</p>",
+      "Text": "<p>Категория: <b>Филлеры с ГК – Увлажнение кожи</b></p><p>Как, <b>по Вашим ожиданиям, изменится использование Вами каждого бренда в ближайшие 12 месяцев</b>?</p>",
       "QuestionType": "Table_SingleChoice",
       "ExportedQuestionFlags": {},
       "ExportedSurveyFlags": {},
@@ -490,7 +491,7 @@
     {
       "OrderIdx": 38,
       "Number": 11120,
-      "Text": "<p>Категория: <b>Филлеры с ГК – Увлажнение кожи</b></p><p>По каким основным причинам Вы ожидаете увеличения использования бренда <b>{Бренд}</b>?</p>",
+      "Text": "<p>Категория: <b>Филлеры с ГК – Увлажнение кожи</b></p><p>По каким основным причинам Вы <b>ожидаете увеличения</b> использования бренда {Бренд}?</p>",
       "QuestionType": "MultipleChoice",
       "ExportedQuestionFlags": {
         "RandomizeAnswers": true
@@ -505,7 +506,7 @@
     {
       "OrderIdx": 39,
       "Number": 11220,
-      "Text": "<p>Категория: <b>Филлеры с ГК – Увлажнение кожи</b></p><p>Какие из указанных ниже брендов Вы <b>не используете</b> в настоящее время, но готовы рассмотреть для использования в ближайшие 12 месяцев?</p>",
+      "Text": "<p>Категория: <b>Филлеры с ГК – Увлажнение кожи</b></p><p>Какие из указанных ниже брендов Вы <b>не используете в настоящее время,</b> но готовы <b>рассмотреть для использования в ближайшие 12 месяцев</b>?</p>",
       "QuestionType": "MultipleChoice",
       "ExportedQuestionFlags": {
         "RandomizeAnswers": true
@@ -536,7 +537,7 @@
     {
       "OrderIdx": 41,
       "Number": 10730,
-      "Text": "<p>Категория: <b>Филлеры без ГК (Биостимуляторы)</b></p><p>Какие из указанных ниже брендов Вы использовали <b>наиболее часто</b> за последние 3 месяца?</p>",
+      "Text": "<p>Категория: <b>Филлеры без ГК (Биостимуляторы)</b></p><p>Какие из указанных ниже брендов Вы использовали наиболее часто за последние 3 месяца?</p>",
       "QuestionType": "MultipleChoice",
       "ExportedQuestionFlags": {
         "RandomizeAnswers": true
@@ -565,7 +566,7 @@
     {
       "OrderIdx": 43,
       "Number": 10930,
-      "Text": "<p>Категория: <b>Филлеры без ГК (Биостимуляторы)</b></p><p>Какой <b>один</b> бренд у Вас сильнее всего ассоциируется с каждой характеристикой?</p>",
+      "Text": "<p>Категория: <b>Филлеры без ГК (Биостимуляторы)</b></p><p>Какой <b>один бренд у Вас сильнее всего ассоциируется</b> с каждой характеристикой?</p>",
       "QuestionType": "Table_SingleChoice",
       "ExportedQuestionFlags": {},
       "ExportedSurveyFlags": {},
@@ -579,7 +580,7 @@
     {
       "OrderIdx": 44,
       "Number": 11030,
-      "Text": "<p>Категория: <b>Филлеры без ГК (Биостимуляторы)</b></p><p>Как, по Вашим ожиданиям, изменится использование Вами каждого бренда в ближайшие 12 месяцев?</p>",
+      "Text": "<p>Категория: <b>Филлеры без ГК (Биостимуляторы)</b></p><p>Как, <b>по Вашим ожиданиям, изменится использование Вами каждого бренда в ближайшие 12 месяцев</b>?</p>",
       "QuestionType": "Table_SingleChoice",
       "ExportedQuestionFlags": {},
       "ExportedSurveyFlags": {},
@@ -607,7 +608,7 @@
     {
       "OrderIdx": 46,
       "Number": 11130,
-      "Text": "<p>Категория: <b>Филлеры без ГК (Биостимуляторы)</b></p><p>По каким основным причинам Вы ожидаете увеличения использования бренда <b>{Бренд}</b>?</p>",
+      "Text": "<p>Категория: <b>Филлеры без ГК (Биостимуляторы)</b></p><p>По каким основным причинам Вы <b>ожидаете увеличения</b> использования бренда {Бренд}?</p>",
       "QuestionType": "MultipleChoice",
       "ExportedQuestionFlags": {
         "RandomizeAnswers": true
@@ -622,7 +623,7 @@
     {
       "OrderIdx": 47,
       "Number": 11230,
-      "Text": "<p>Категория: <b>Филлеры без ГК (Биостимуляторы)</b></p><p>Какие из указанных ниже брендов Вы <b>не используете</b> в настоящее время, но готовы рассмотреть для использования в ближайшие 12 месяцев?</p>",
+      "Text": "<p>Категория: <b>Филлеры без ГК (Биостимуляторы)</b></p><p>Какие из указанных ниже брендов Вы <b>не используете в настоящее время,</b> но готовы <b>рассмотреть для использования в ближайшие 12 месяцев</b>?</p>",
       "QuestionType": "MultipleChoice",
       "ExportedQuestionFlags": {
         "RandomizeAnswers": true
@@ -653,7 +654,7 @@
     {
       "OrderIdx": 49,
       "Number": 11400,
-      "Text": "<p><b>Раздел 3. Факторы перехода, барьеры и неудовлетворенные потребности</b></p><p>За последние 12 месяцев переводили ли Вы пациента с одного бренда на другой в рамках одной категории или в разных категориях?</p>",
+      "Text": "<p><b>Раздел 3. Факторы перехода, барьеры и неудовлетворенные потребности</b></p><p>За <b>последние 12 месяцев</b> переводили ли Вы <b>пациента с одного бренда на другой</b> в рамках одной категории или <b>в разных категориях</b>?</p>",
       "QuestionType": "Table_SingleChoice",
       "ExportedQuestionFlags": {},
       "ExportedSurveyFlags": {},
@@ -680,7 +681,7 @@
     {
       "OrderIdx": 51,
       "Number": 11511,
-      "Text": "<p>Категория: <b>Филлеры с ГК – Объем и лифтинг / Контуринг</b></p><p>С какого на какой бренд Вы перевели пациента в последний раз в рамках этой категории?</p><p><b>Исходный бренд:</b></p>",
+      "Text": "<p>Категория: <b>Филлеры с ГК – Объем и лифтинг / Контуринг</b></p><p>С <b>какого на какой бренд Вы перевели пациента</b> в последний раз в рамках этой категории?</p><p><b>Исходный бренд:</b></p>",
       "QuestionType": "SingleChoice",
       "ExportedQuestionFlags": {},
       "ExportedSurveyFlags": {},
@@ -691,7 +692,7 @@
     {
       "OrderIdx": 52,
       "Number": 11512,
-      "Text": "<p>Категория: <b>Филлеры с ГК – Объем и лифтинг / Контуринг</b></p><p>С какого на какой бренд Вы перевели пациента в последний раз в рамках этой категории?</p><p>Исходный бренд: {Q15_1_FROM_TXT}</p><p><b>Бренд, на который перешли:</b></p>",
+      "Text": "<p>Категория: <b>Филлеры с ГК – Объем и лифтинг / Контуринг</b></p><p>С <b>какого на какой бренд Вы перевели пациента</b> в последний раз в рамках этой категории?</p><p>Исходный бренд: {Q15_1_FROM_TXT}</p><p><b>Бренд, на который перешли:</b></p>",
       "QuestionType": "SingleChoice",
       "ExportedQuestionFlags": {},
       "ExportedSurveyFlags": {},
@@ -703,7 +704,7 @@
     {
       "OrderIdx": 53,
       "Number": 11610,
-      "Text": "<p>Категория: <b>Филлеры с ГК – Объем и лифтинг / Контуринг</b></p><p>Каковы были основные причины такого перехода?</p>",
+      "Text": "<p>Категория: <b>Филлеры с ГК – Объем и лифтинг / Контуринг</b></p><p>Каковы были <b>основные причины такого перехода?</b></p>",
       "QuestionType": "MultipleChoice",
       "ExportedQuestionFlags": {
         "RandomizeAnswers": true
@@ -718,7 +719,7 @@
     {
       "OrderIdx": 54,
       "Number": 11521,
-      "Text": "<p>Категория: <b>Филлеры с ГК – Увлажнение кожи</b></p><p>С какого на какой бренд Вы перевели пациента в последний раз в рамках этой категории?</p><p><b>Исходный бренд:</b></p>",
+      "Text": "<p>Категория: <b>Филлеры с ГК – Увлажнение кожи</b></p><p>С <b>какого на какой бренд Вы перевели пациента</b> в последний раз в рамках этой категории?</p><p><b>Исходный бренд:</b></p>",
       "QuestionType": "SingleChoice",
       "ExportedQuestionFlags": {},
       "ExportedSurveyFlags": {},
@@ -729,7 +730,7 @@
     {
       "OrderIdx": 55,
       "Number": 11522,
-      "Text": "<p>Категория: <b>Филлеры с ГК – Увлажнение кожи</b></p><p>С какого на какой бренд Вы перевели пациента в последний раз в рамках этой категории?</p><p>Исходный бренд: {Q15_2_FROM_TXT}</p><p><b>Бренд, на который перешли:</b></p>",
+      "Text": "<p>Категория: <b>Филлеры с ГК – Увлажнение кожи</b></p><p>С <b>какого на какой бренд Вы перевели пациента</b> в последний раз в рамках этой категории?</p><p>Исходный бренд: {Q15_2_FROM_TXT}</p><p><b>Бренд, на который перешли:</b></p>",
       "QuestionType": "SingleChoice",
       "ExportedQuestionFlags": {},
       "ExportedSurveyFlags": {},
@@ -741,7 +742,7 @@
     {
       "OrderIdx": 56,
       "Number": 11620,
-      "Text": "<p>Категория: <b>Филлеры с ГК – Увлажнение кожи</b></p><p>Каковы были основные причины такого перехода?</p>",
+      "Text": "<p>Категория: <b>Филлеры с ГК – Увлажнение кожи</b></p><p>Каковы были <b>основные причины такого перехода?</b></p>",
       "QuestionType": "MultipleChoice",
       "ExportedQuestionFlags": {
         "RandomizeAnswers": true
@@ -756,7 +757,7 @@
     {
       "OrderIdx": 57,
       "Number": 11531,
-      "Text": "<p>Категория: <b>Филлеры без ГК (Биостимуляторы)</b></p><p>С какого на какой бренд Вы перевели пациента в последний раз в рамках этой категории?</p><p><b>Исходный бренд:</b></p>",
+      "Text": "<p>Категория: <b>Филлеры без ГК (Биостимуляторы)</b></p><p>С <b>какого на какой бренд Вы перевели пациента</b> в последний раз в рамках этой категории?</p><p><b>Исходный бренд:</b></p>",
       "QuestionType": "SingleChoice",
       "ExportedQuestionFlags": {},
       "ExportedSurveyFlags": {},
@@ -767,7 +768,7 @@
     {
       "OrderIdx": 58,
       "Number": 11532,
-      "Text": "<p>Категория: <b>Филлеры без ГК (Биостимуляторы)</b></p><p>С какого на какой бренд Вы перевели пациента в последний раз в рамках этой категории?</p><p>Исходный бренд: {Q15_3_FROM_TXT}</p><p><b>Бренд, на который перешли:</b></p>",
+      "Text": "<p>Категория: <b>Филлеры без ГК (Биостимуляторы)</b></p><p>С <b>какого на какой бренд Вы перевели пациента</b> в последний раз в рамках этой категории?</p><p>Исходный бренд: {Q15_3_FROM_TXT}</p><p><b>Бренд, на который перешли:</b></p>",
       "QuestionType": "SingleChoice",
       "ExportedQuestionFlags": {},
       "ExportedSurveyFlags": {},
@@ -779,7 +780,7 @@
     {
       "OrderIdx": 59,
       "Number": 11630,
-      "Text": "<p>Категория: <b>Филлеры без ГК (Биостимуляторы)</b></p><p>Каковы были основные причины такого перехода?</p>",
+      "Text": "<p>Категория: <b>Филлеры без ГК (Биостимуляторы)</b></p><p>Каковы были <b>основные причины такого перехода?</b></p>",
       "QuestionType": "MultipleChoice",
       "ExportedQuestionFlags": {
         "RandomizeAnswers": true
@@ -853,7 +854,7 @@
     {
       "OrderIdx": 65,
       "Number": 12000,
-      "Text": "<p><b>Раздел 4. Взаимодействие с производителем, доля и каналы информационного присутствия</b></p><p>Если рассматривать инъекционные дермальные филлеры (с ГК и без ГК), какие компании-производители <b>первыми приходят Вам в голову</b>? Пожалуйста, перечислите до 5 компаний.</p>",
+      "Text": "<p><b>Раздел 4. Взаимодействие с производителем, доля и каналы информационного присутствия</b></p><p>Если рассматривать инъекционные дермальные филлеры (с ГК и без ГК), какие компании-производители первыми приходят Вам в голову? Пожалуйста, перечислите до 5 компаний.</p>",
       "QuestionType": "Table_Text",
       "ExportedQuestionFlags": {},
       "ExportedSurveyFlags": {},
@@ -864,7 +865,7 @@
     {
       "OrderIdx": 66,
       "Number": 12100,
-      "Text": "Какие компании в области эстетической медицины взаимодействовали с Вами или проводили для Вас презентацию по инъекционным филлерам (с ГК или без ГК) за последние 3 месяца?",
+      "Text": "Какие <b>компании в области эстетической медицины взаимодействовали с Вами или проводили для Вас презентацию по инъекционным филлерам (с ГК или без ГК)</b> за <b>последние 3 месяца</b>?",
       "QuestionType": "MultipleChoice",
       "ExportedQuestionFlags": {
         "RandomizeAnswers": true
@@ -877,7 +878,7 @@
     {
       "OrderIdx": 67,
       "Number": 12200,
-      "Text": "За последние 3 месяца примерно сколько раз Вы взаимодействовали с каждой компанией по вопросу инъекционных филлеров?",
+      "Text": "За последние 3 месяца примерно <b>сколько раз Вы взаимодействовали</b> с каждой компанией по вопросу инъекционных филлеров?",
       "QuestionType": "Table_Numeric",
       "ExportedQuestionFlags": {},
       "ExportedSurveyFlags": {},
@@ -905,7 +906,7 @@
     {
       "OrderIdx": 69,
       "Number": 12300,
-      "Text": "<p>Компания: <b>{Компания}</b></p><p>Как Вы оцениваете качество взаимодействия с этой компанией за последние 3 месяца? Насколько Вы согласны со следующими утверждениями?</p>",
+      "Text": "<p>Компания: <b>{Компания}</b></p><p>Как Вы <b>оцениваете качество взаимодействия с</b> этой компанией за последние 3 месяца? Насколько Вы согласны со следующими утверждениями?</p>",
       "QuestionType": "Table_SingleChoice",
       "ExportedQuestionFlags": {},
       "ExportedSurveyFlags": {},
@@ -918,7 +919,7 @@
     {
       "OrderIdx": 70,
       "Number": 12400,
-      "Text": "<p>Компания: <b>{Компания}</b></p><p>Какие каналы эта компания использовала для взаимодействия с Вами за последние 3 месяца?</p>",
+      "Text": "<p>Компания: <b>{Компания}</b></p><p>Какие <b>каналы</b> эта компания использовала для взаимодействия с Вами за последние 3 месяца?</p>",
       "QuestionType": "MultipleChoice",
       "ExportedQuestionFlags": {
         "RandomizeAnswers": true
@@ -932,7 +933,7 @@
     {
       "OrderIdx": 71,
       "Number": 12500,
-      "Text": "Какие каналы Вы предпочитаете использовать для взаимодействия с компаниями, предоставляющими информацию или поддержку в отношении инъекционных филлеров?",
+      "Text": "Какие <b>каналы Вы предпочитаете</b> использовать <b>для взаимодействия с компаниями, предоставляющими информацию или поддержку в отношении инъекционных филлеров</b>?",
       "QuestionType": "MultipleChoice",
       "ExportedQuestionFlags": {
         "RandomizeAnswers": true
@@ -958,7 +959,7 @@
     {
       "OrderIdx": 73,
       "Number": 12600,
-      "Text": "Какова идеальная частота взаимодействия с компанией по каждому из выбранных каналов за 3 месяца?",
+      "Text": "Какова <b>идеальная частота взаимодействия с компанией</b> по каждому из выбранных каналов за 3 месяца?",
       "QuestionType": "Table_Numeric",
       "ExportedQuestionFlags": {},
       "ExportedSurveyFlags": {},
@@ -973,7 +974,7 @@
     {
       "OrderIdx": 74,
       "Number": 12700,
-      "Text": "Какие виды материалов или поддержки со стороны производителей филлеров были бы для Вас наиболее ценными?",
+      "Text": "Какие виды материалов или поддержки со стороны производителей филлеров <b>были бы для Вас наиболее ценными</b>?",
       "QuestionType": "MultipleChoice",
       "ExportedQuestionFlags": {
         "RandomizeAnswers": true
@@ -999,7 +1000,7 @@
     {
       "OrderIdx": 76,
       "Number": 12800,
-      "Text": "Какой вид поддержки со стороны фармацевтических компаний / компаний в области эстетической медицины больше всего повысит Вашу готовность начать использование или вернуться к использованию премиального бренда филлера?",
+      "Text": "Какой вид поддержки со стороны фармацевтических компаний / компаний в области эстетической медицины <b>больше всего повысит Вашу готовность начать использование или вернуться к использованию премиального бренда филлера</b>?",
       "QuestionType": "MultipleChoice",
       "ExportedQuestionFlags": {},
       "ExportedSurveyFlags": {},
@@ -1037,7 +1038,7 @@
     {
       "OrderIdx": 79,
       "Number": 13000,
-      "Text": "Когда Вы рассматриваете какой-либо премиальный международный бренд филлеров, какие опасения могут ограничить Вашу готовность начать или увеличить использование этого бренда?",
+      "Text": "Когда Вы рассматриваете какой-либо <b>премиальный международный бренд филлеров</b>, какие опасения могут ограничить Вашу готовность начать или увеличить использование этого бренда?",
       "QuestionType": "MultipleChoice",
       "ExportedQuestionFlags": {},
       "ExportedSurveyFlags": {},
@@ -1049,7 +1050,7 @@
     {
       "OrderIdx": 80,
       "Number": 13100,
-      "Text": "<p><b>Раздел 5. Ценообразование, закупки и преобразование рыночной цены</b></p><p>Какой из перечисленных вариантов наилучшим образом описывает Ваше участие в закупке инъекционных филлеров для Вашего места работы/ клиники?</p>",
+      "Text": "<p><b>Раздел 5. Ценообразование, закупки и преобразование рыночной цены</b></p><p>Какой из перечисленных вариантов наилучшим образом описывает <b>Ваше участие в закупке инъекционных филлеров</b> для Вашего места работы/ клиники?</p>",
       "QuestionType": "SingleChoice",
       "ExportedQuestionFlags": {},
       "ExportedSurveyFlags": {},
@@ -1059,7 +1060,7 @@
     {
       "OrderIdx": 81,
       "Number": 13200,
-      "Text": "Кто оказывает наибольшее влияние на решения по закупке брендов инъекционных филлеров в Вашем месте работы?",
+      "Text": "Кто <b>оказывает наибольшее влияние на решения по закупке брендов инъекционных филлеров</b> в Вашем месте работы?",
       "QuestionType": "SingleChoice",
       "ExportedQuestionFlags": {},
       "ExportedSurveyFlags": {},
@@ -1068,52 +1069,149 @@
     },
     {
       "OrderIdx": 82,
-      "Number": 13301,
-      "Text": "В отношении брендов, которые Вы лично использовали за последние 3 месяца, какой формат упаковки закупается клиникой?",
+      "Number": 13311,
+      "Text": "<p>Категория: <b>Филлеры с ГК – Объем и лифтинг / Контуринг</b></p><p>В отношении брендов, <b>которые Вы лично использовали за последние 3 месяца</b>, <b>какой формат упаковки закупается клиникой</b>?</p>",
       "QuestionType": "Table_Text",
       "ExportedQuestionFlags": {},
       "ExportedSurveyFlags": {},
-      "OutputColumnTemplate": "Q33_PACK",
+      "OutputColumnTemplate": "Q33_PACK_1",
       "Comment": "<b>Конфигурация упаковки</b> = упаковка, приобретаемая клиникой (напр., 1 шприц, 2 шприца, 1 флакон и т. д.).<br><b>Цена по прейскуранту</b> = официальная опубликованная цена без учета каких-либо скидок, вычетов, акций, соглашений в отношении объемов или особых коммерческих условий.<br><b>Цена нетто за упаковку</b> = фактическая цена, уплачиваемая клиникой с учетом скидок, вычетов, акций, соглашений в отношении объемов или особых коммерческих условий.<br>Если не знаете ответ, впишите 0.",
-      "ScriptBeforeShow": "showRowsWhere(Q, function (code) { return usedBrands().indexOf(code) > -1; });\nreturn Q.rows.hasVisible ? ok : skip;",
-      "RowList": "Q33 бренды"
+      "ScriptBeforeShow": "showRowsWhere(Q, function (code) { return Q7_1.isChecked(code); });\nreturn Q.rows.hasVisible ? ok : skip;",
+      "Condition": "Q105(row = 1 and valueNum > 0)",
+      "RowList": "Q33 бренды кат.1"
     },
     {
       "OrderIdx": 83,
-      "Number": 13302,
-      "Text": "Какова обычная закупочная <b>цена по прейскуранту за упаковку</b> для клиники (руб.)?",
+      "Number": 13312,
+      "Text": "<p>Категория: <b>Филлеры с ГК – Объем и лифтинг / Контуринг</b></p><p>В отношении брендов, <b>которые Вы лично использовали за последние 3 месяца</b>, какова <b>обычная закупочная цена для клиники</b> по прейскуранту за упаковку (руб.)?</p>",
       "QuestionType": "Table_Numeric",
       "ExportedQuestionFlags": {
         "AllowFractionalNumbers": true
       },
       "ExportedSurveyFlags": {},
-      "OutputColumnTemplate": "Q33_LIST",
-      "Comment": "<b>Конфигурация упаковки</b> = упаковка, приобретаемая клиникой (напр., 1 шприц, 2 шприца, 1 флакон и т. д.).<br><b>Цена по прейскуранту</b> = официальная опубликованная цена без учета каких-либо скидок, вычетов, акций, соглашений в отношении объемов или особых коммерческих условий.<br><b>Цена нетто за упаковку</b> = фактическая цена, уплачиваемая клиникой с учетом скидок, вычетов, акций, соглашений в отношении объемов или особых коммерческих условий.<br>Цена в рублях. Если не знаете ответ, впишите 0.",
-      "ScriptBeforeShow": "showRowsWhere(Q, function (code) { return usedBrands().indexOf(code) > -1; });\nreturn Q.rows.hasVisible ? ok : skip;",
-      "RowList": "Q33 бренды",
+      "OutputColumnTemplate": "Q33_LIST_1",
+      "Comment": "<b>Конфигурация упаковки</b> = упаковка, приобретаемая клиникой (напр., 1 шприц, 2 шприца, 1 флакон и т. д.).<br><b>Цена по прейскуранту</b> = официальная опубликованная цена без учета каких-либо скидок, вычетов, акций, соглашений в отношении объемов или особых коммерческих условий.<br><b>Цена нетто за упаковку</b> = фактическая цена, уплачиваемая клиникой с учетом скидок, вычетов, акций, соглашений в отношении объемов или особых коммерческих условий.<br>Если не знаете ответ, впишите 0.",
+      "ScriptBeforeShow": "showRowsWhere(Q, function (code) { return Q7_1.isChecked(code); });\nreturn Q.rows.hasVisible ? ok : skip;",
+      "Condition": "Q105(row = 1 and valueNum > 0)",
+      "RowList": "Q33 бренды кат.1",
       "AnswerNumberFrom": 0,
       "AnswerNumberTo": 99999999
     },
     {
       "OrderIdx": 84,
-      "Number": 13303,
-      "Text": "Какова обычная <b>цена нетто за упаковку</b> для клиники (руб.)?",
+      "Number": 13313,
+      "Text": "<p>Категория: <b>Филлеры с ГК – Объем и лифтинг / Контуринг</b></p><p>В отношении брендов, <b>которые Вы лично использовали за последние 3 месяца</b>, какова <b>обычная закупочная цена для клиники</b> нетто за упаковку (руб.)?</p>",
       "QuestionType": "Table_Numeric",
       "ExportedQuestionFlags": {
         "AllowFractionalNumbers": true
       },
       "ExportedSurveyFlags": {},
-      "OutputColumnTemplate": "Q33_NET",
-      "Comment": "<b>Конфигурация упаковки</b> = упаковка, приобретаемая клиникой (напр., 1 шприц, 2 шприца, 1 флакон и т. д.).<br><b>Цена по прейскуранту</b> = официальная опубликованная цена без учета каких-либо скидок, вычетов, акций, соглашений в отношении объемов или особых коммерческих условий.<br><b>Цена нетто за упаковку</b> = фактическая цена, уплачиваемая клиникой с учетом скидок, вычетов, акций, соглашений в отношении объемов или особых коммерческих условий.<br>Цена в рублях. Если не знаете ответ, впишите 0.",
-      "ScriptBeforeShow": "showRowsWhere(Q, function (code) { return usedBrands().indexOf(code) > -1; });\nreturn Q.rows.hasVisible ? ok : skip;",
-      "RowList": "Q33 бренды",
+      "OutputColumnTemplate": "Q33_NET_1",
+      "Comment": "<b>Конфигурация упаковки</b> = упаковка, приобретаемая клиникой (напр., 1 шприц, 2 шприца, 1 флакон и т. д.).<br><b>Цена по прейскуранту</b> = официальная опубликованная цена без учета каких-либо скидок, вычетов, акций, соглашений в отношении объемов или особых коммерческих условий.<br><b>Цена нетто за упаковку</b> = фактическая цена, уплачиваемая клиникой с учетом скидок, вычетов, акций, соглашений в отношении объемов или особых коммерческих условий.<br>Если не знаете ответ, впишите 0.",
+      "ScriptBeforeShow": "showRowsWhere(Q, function (code) { return Q7_1.isChecked(code); });\nreturn Q.rows.hasVisible ? ok : skip;",
+      "Condition": "Q105(row = 1 and valueNum > 0)",
+      "RowList": "Q33 бренды кат.1",
       "AnswerNumberFrom": 0,
       "AnswerNumberTo": 99999999
     },
     {
       "OrderIdx": 85,
+      "Number": 13321,
+      "Text": "<p>Категория: <b>Филлеры с ГК – Увлажнение кожи</b></p><p>В отношении брендов, <b>которые Вы лично использовали за последние 3 месяца</b>, <b>какой формат упаковки закупается клиникой</b>?</p>",
+      "QuestionType": "Table_Text",
+      "ExportedQuestionFlags": {},
+      "ExportedSurveyFlags": {},
+      "OutputColumnTemplate": "Q33_PACK_2",
+      "Comment": "<b>Конфигурация упаковки</b> = упаковка, приобретаемая клиникой (напр., 1 шприц, 2 шприца, 1 флакон и т. д.).<br><b>Цена по прейскуранту</b> = официальная опубликованная цена без учета каких-либо скидок, вычетов, акций, соглашений в отношении объемов или особых коммерческих условий.<br><b>Цена нетто за упаковку</b> = фактическая цена, уплачиваемая клиникой с учетом скидок, вычетов, акций, соглашений в отношении объемов или особых коммерческих условий.<br>Если не знаете ответ, впишите 0.",
+      "ScriptBeforeShow": "showRowsWhere(Q, function (code) { return Q7_2.isChecked(code); });\nreturn Q.rows.hasVisible ? ok : skip;",
+      "Condition": "Q105(row = 2 and valueNum > 0)",
+      "RowList": "Q33 бренды кат.2"
+    },
+    {
+      "OrderIdx": 86,
+      "Number": 13322,
+      "Text": "<p>Категория: <b>Филлеры с ГК – Увлажнение кожи</b></p><p>В отношении брендов, <b>которые Вы лично использовали за последние 3 месяца</b>, какова <b>обычная закупочная цена для клиники</b> по прейскуранту за упаковку (руб.)?</p>",
+      "QuestionType": "Table_Numeric",
+      "ExportedQuestionFlags": {
+        "AllowFractionalNumbers": true
+      },
+      "ExportedSurveyFlags": {},
+      "OutputColumnTemplate": "Q33_LIST_2",
+      "Comment": "<b>Конфигурация упаковки</b> = упаковка, приобретаемая клиникой (напр., 1 шприц, 2 шприца, 1 флакон и т. д.).<br><b>Цена по прейскуранту</b> = официальная опубликованная цена без учета каких-либо скидок, вычетов, акций, соглашений в отношении объемов или особых коммерческих условий.<br><b>Цена нетто за упаковку</b> = фактическая цена, уплачиваемая клиникой с учетом скидок, вычетов, акций, соглашений в отношении объемов или особых коммерческих условий.<br>Если не знаете ответ, впишите 0.",
+      "ScriptBeforeShow": "showRowsWhere(Q, function (code) { return Q7_2.isChecked(code); });\nreturn Q.rows.hasVisible ? ok : skip;",
+      "Condition": "Q105(row = 2 and valueNum > 0)",
+      "RowList": "Q33 бренды кат.2",
+      "AnswerNumberFrom": 0,
+      "AnswerNumberTo": 99999999
+    },
+    {
+      "OrderIdx": 87,
+      "Number": 13323,
+      "Text": "<p>Категория: <b>Филлеры с ГК – Увлажнение кожи</b></p><p>В отношении брендов, <b>которые Вы лично использовали за последние 3 месяца</b>, какова <b>обычная закупочная цена для клиники</b> нетто за упаковку (руб.)?</p>",
+      "QuestionType": "Table_Numeric",
+      "ExportedQuestionFlags": {
+        "AllowFractionalNumbers": true
+      },
+      "ExportedSurveyFlags": {},
+      "OutputColumnTemplate": "Q33_NET_2",
+      "Comment": "<b>Конфигурация упаковки</b> = упаковка, приобретаемая клиникой (напр., 1 шприц, 2 шприца, 1 флакон и т. д.).<br><b>Цена по прейскуранту</b> = официальная опубликованная цена без учета каких-либо скидок, вычетов, акций, соглашений в отношении объемов или особых коммерческих условий.<br><b>Цена нетто за упаковку</b> = фактическая цена, уплачиваемая клиникой с учетом скидок, вычетов, акций, соглашений в отношении объемов или особых коммерческих условий.<br>Если не знаете ответ, впишите 0.",
+      "ScriptBeforeShow": "showRowsWhere(Q, function (code) { return Q7_2.isChecked(code); });\nreturn Q.rows.hasVisible ? ok : skip;",
+      "Condition": "Q105(row = 2 and valueNum > 0)",
+      "RowList": "Q33 бренды кат.2",
+      "AnswerNumberFrom": 0,
+      "AnswerNumberTo": 99999999
+    },
+    {
+      "OrderIdx": 88,
+      "Number": 13331,
+      "Text": "<p>Категория: <b>Филлеры без ГК (Биостимуляторы)</b></p><p>В отношении брендов, <b>которые Вы лично использовали за последние 3 месяца</b>, <b>какой формат упаковки закупается клиникой</b>?</p>",
+      "QuestionType": "Table_Text",
+      "ExportedQuestionFlags": {},
+      "ExportedSurveyFlags": {},
+      "OutputColumnTemplate": "Q33_PACK_3",
+      "Comment": "<b>Конфигурация упаковки</b> = упаковка, приобретаемая клиникой (напр., 1 шприц, 2 шприца, 1 флакон и т. д.).<br><b>Цена по прейскуранту</b> = официальная опубликованная цена без учета каких-либо скидок, вычетов, акций, соглашений в отношении объемов или особых коммерческих условий.<br><b>Цена нетто за упаковку</b> = фактическая цена, уплачиваемая клиникой с учетом скидок, вычетов, акций, соглашений в отношении объемов или особых коммерческих условий.<br>Если не знаете ответ, впишите 0.",
+      "ScriptBeforeShow": "showRowsWhere(Q, function (code) { return Q7_3.isChecked(code); });\nreturn Q.rows.hasVisible ? ok : skip;",
+      "Condition": "Q105(row = 3 and valueNum > 0)",
+      "RowList": "Q33 бренды кат.3"
+    },
+    {
+      "OrderIdx": 89,
+      "Number": 13332,
+      "Text": "<p>Категория: <b>Филлеры без ГК (Биостимуляторы)</b></p><p>В отношении брендов, <b>которые Вы лично использовали за последние 3 месяца</b>, какова <b>обычная закупочная цена для клиники</b> по прейскуранту за упаковку (руб.)?</p>",
+      "QuestionType": "Table_Numeric",
+      "ExportedQuestionFlags": {
+        "AllowFractionalNumbers": true
+      },
+      "ExportedSurveyFlags": {},
+      "OutputColumnTemplate": "Q33_LIST_3",
+      "Comment": "<b>Конфигурация упаковки</b> = упаковка, приобретаемая клиникой (напр., 1 шприц, 2 шприца, 1 флакон и т. д.).<br><b>Цена по прейскуранту</b> = официальная опубликованная цена без учета каких-либо скидок, вычетов, акций, соглашений в отношении объемов или особых коммерческих условий.<br><b>Цена нетто за упаковку</b> = фактическая цена, уплачиваемая клиникой с учетом скидок, вычетов, акций, соглашений в отношении объемов или особых коммерческих условий.<br>Если не знаете ответ, впишите 0.",
+      "ScriptBeforeShow": "showRowsWhere(Q, function (code) { return Q7_3.isChecked(code); });\nreturn Q.rows.hasVisible ? ok : skip;",
+      "Condition": "Q105(row = 3 and valueNum > 0)",
+      "RowList": "Q33 бренды кат.3",
+      "AnswerNumberFrom": 0,
+      "AnswerNumberTo": 99999999
+    },
+    {
+      "OrderIdx": 90,
+      "Number": 13333,
+      "Text": "<p>Категория: <b>Филлеры без ГК (Биостимуляторы)</b></p><p>В отношении брендов, <b>которые Вы лично использовали за последние 3 месяца</b>, какова <b>обычная закупочная цена для клиники</b> нетто за упаковку (руб.)?</p>",
+      "QuestionType": "Table_Numeric",
+      "ExportedQuestionFlags": {
+        "AllowFractionalNumbers": true
+      },
+      "ExportedSurveyFlags": {},
+      "OutputColumnTemplate": "Q33_NET_3",
+      "Comment": "<b>Конфигурация упаковки</b> = упаковка, приобретаемая клиникой (напр., 1 шприц, 2 шприца, 1 флакон и т. д.).<br><b>Цена по прейскуранту</b> = официальная опубликованная цена без учета каких-либо скидок, вычетов, акций, соглашений в отношении объемов или особых коммерческих условий.<br><b>Цена нетто за упаковку</b> = фактическая цена, уплачиваемая клиникой с учетом скидок, вычетов, акций, соглашений в отношении объемов или особых коммерческих условий.<br>Если не знаете ответ, впишите 0.",
+      "ScriptBeforeShow": "showRowsWhere(Q, function (code) { return Q7_3.isChecked(code); });\nreturn Q.rows.hasVisible ? ok : skip;",
+      "Condition": "Q105(row = 3 and valueNum > 0)",
+      "RowList": "Q33 бренды кат.3",
+      "AnswerNumberFrom": 0,
+      "AnswerNumberTo": 99999999
+    },
+    {
+      "OrderIdx": 91,
       "Number": 13400,
-      "Text": "Какая цена обычно действует для пациентов в отношении указанных ниже категорий процедур с филлерами в Вашем месте работы?",
+      "Text": "<b>Какая цена обычно действует</b> для пациентов в отношении указанных ниже <b>категорий процедур с филлерами в Вашем месте работы</b>?",
       "QuestionType": "Table_SingleChoice",
       "ExportedQuestionFlags": {},
       "ExportedSurveyFlags": {},
@@ -1124,7 +1222,7 @@
       "AnswerList": "Q34"
     },
     {
-      "OrderIdx": 86,
+      "OrderIdx": 92,
       "Number": 13500,
       "Text": "Какая цена обычно взимается с пациента за типичный сеанс лечения в каждой из указанных ниже категорий процедур (руб.)?",
       "QuestionType": "Table_Numeric",
@@ -1139,7 +1237,7 @@
       "AnswerNumberTo": 99999999
     },
     {
-      "OrderIdx": 87,
+      "OrderIdx": 93,
       "Number": 13600,
       "Text": "Какая цена обычно взимается с пациента за мл препарата в каждой из указанных ниже категорий процедур (руб./мл)?",
       "QuestionType": "Table_Numeric",
@@ -1154,9 +1252,9 @@
       "AnswerNumberTo": 99999999
     },
     {
-      "OrderIdx": 88,
+      "OrderIdx": 94,
       "Number": 13700,
-      "Text": "Насколько Вам известно, какая доля инъекционных филлеров (с ГК и без ГК), закупаемых Вашей клиникой, поступает по каждому из указанных ниже каналов?",
+      "Text": "Насколько Вам известно, <b>какая доля инъекционных филлеров (с ГК и без ГК), закупаемых Вашей клиникой, поступает по каждому из указанных ниже каналов</b>?",
       "QuestionType": "Table_Numeric",
       "ExportedQuestionFlags": {},
       "ExportedSurveyFlags": {},
@@ -1168,9 +1266,9 @@
       "AnswerNumberTo": 100
     },
     {
-      "OrderIdx": 89,
+      "OrderIdx": 95,
       "Number": 13800,
-      "Text": "Если рассматривать филлеры, закупаемые для Вашей клиники, какие типы брендов в основном закупаются по каждому из каналов?",
+      "Text": "Если рассматривать <b>филлеры, закупаемые для Вашей клиники</b>, какие типы брендов в основном закупаются по каждому из каналов?",
       "QuestionType": "Table_SingleChoice",
       "ExportedQuestionFlags": {},
       "ExportedSurveyFlags": {},
@@ -1181,7 +1279,7 @@
       "AnswerList": "Q38"
     },
     {
-      "OrderIdx": 90,
+      "OrderIdx": 96,
       "Number": 13900,
       "Text": "По каким причинам в основном выбирается тот или иной канал закупки?",
       "QuestionType": "MultipleChoice",
@@ -1193,9 +1291,9 @@
       "AnswerList": "Q39"
     },
     {
-      "OrderIdx": 91,
+      "OrderIdx": 97,
       "Number": 14000,
-      "Text": "В какой степени на Ваши решения по выбору бренда филлера влияют коммерческие условия (напр., скидки, акции, комплексные предложения)?",
+      "Text": "В какой степени на Ваши решения по выбору бренда филлера влияют <b>коммерческие условия</b> (напр., скидки, акции, комплексные предложения)?",
       "QuestionType": "SingleChoice",
       "ExportedQuestionFlags": {},
       "ExportedSurveyFlags": {},
@@ -1203,7 +1301,7 @@
       "AnswerList": "Q40"
     },
     {
-      "OrderIdx": 92,
+      "OrderIdx": 98,
       "Number": 14100,
       "Text": "Какие из указанных ниже факторов имеют наибольшее влияние на прибыльность бренда филлера для Вашей практики/ клиники?",
       "QuestionType": "MultipleChoice",
@@ -1218,7 +1316,7 @@
       "AnswerList": "Q41"
     },
     {
-      "OrderIdx": 93,
+      "OrderIdx": 99,
       "Number": 14101,
       "Text": "Пожалуйста, расставьте выбранные факторы по значимости: 1 – первое место, 2 – второе, 3 – третье.",
       "QuestionType": "Ranking",
@@ -1229,16 +1327,16 @@
       "AnswerList": "Q41 (ранжирование)"
     },
     {
-      "OrderIdx": 94,
+      "OrderIdx": 100,
       "Number": 14200,
-      "Text": "Какая компания-производитель инъекционных филлеров наиболее конкурентоспособна с коммерческой точки зрения (напр., в плане ценообразования, скидок, акций, комплексных предложений)?",
+      "Text": "Какая <b>компания-производитель инъекционных филлеров наиболее конкурентоспособна с коммерческой точки зрения</b> (напр., в плане ценообразования, скидок, акций, комплексных предложений)?",
       "QuestionType": "Text",
       "ExportedQuestionFlags": {},
       "ExportedSurveyFlags": {},
       "OutputColumnTemplate": "Q42"
     },
     {
-      "OrderIdx": 95,
+      "OrderIdx": 101,
       "Number": 14300,
       "Text": "Если рассматривать последние 4 года, какие заметные изменения Вы наблюдали на рынке эстетической медицины? Просим Вас учесть любые наблюдения касательно предпочтений в лечении, новых форм препаратов, спроса со стороны пациентов, а также неудовлетворенных потребностей.",
       "QuestionType": "Text",
@@ -1248,9 +1346,9 @@
       "TextLineCount": 5
     },
     {
-      "OrderIdx": 96,
+      "OrderIdx": 102,
       "Number": 20000,
-      "Text": "Хотели бы Вы сообщить дополнительную информацию о применении дермальных филлеров?",
+      "Text": "<b>Хотели бы Вы сообщить дополнительную информацию о применении дермальных филлеров?</b>",
       "QuestionType": "SingleChoice",
       "ExportedQuestionFlags": {},
       "ExportedSurveyFlags": {},
@@ -1258,9 +1356,9 @@
       "AnswerList": "Да/Нет"
     },
     {
-      "OrderIdx": 97,
+      "OrderIdx": 103,
       "Number": 20001,
-      "Text": "Опишите нежелательное явление / жалобу на качество продукции, о которой хотите сообщить.",
+      "Text": "<b>Опишите нежелательное явление / жалобу на качество продукции, о которой хотите сообщить.</b>",
       "QuestionType": "Text",
       "ExportedQuestionFlags": {},
       "ExportedSurveyFlags": {},
@@ -1269,9 +1367,9 @@
       "TextLineCount": 3
     },
     {
-      "OrderIdx": 98,
+      "OrderIdx": 104,
       "Number": 20002,
-      "Text": "Укажите название препарата, с которым предположительно было связано нежелательное явление / жалоба на качество продукции.",
+      "Text": "<b>Укажите название препарата, с которым предположительно было связано нежелательное явление / жалоба на качество продукции.</b>",
       "QuestionType": "Text",
       "ExportedQuestionFlags": {},
       "ExportedSurveyFlags": {},
@@ -1279,9 +1377,9 @@
       "Condition": "Q20000 = 1"
     },
     {
-      "OrderIdx": 99,
+      "OrderIdx": 105,
       "Number": 20003,
-      "Text": "Укажите, каковы показания к использованию данного препарата.",
+      "Text": "<b>Укажите, каковы показания к использованию данного препарата.</b>",
       "QuestionType": "Text",
       "ExportedQuestionFlags": {
         "CanSkip": true
@@ -1291,9 +1389,9 @@
       "Condition": "Q20000 = 1"
     },
     {
-      "OrderIdx": 100,
+      "OrderIdx": 106,
       "Number": 20004,
-      "Text": "Укажите дозировку, которую пациент применял по данному препарату.",
+      "Text": "<b>Укажите дозировку, которую пациент применял по данному препарату.</b>",
       "QuestionType": "Text",
       "ExportedQuestionFlags": {
         "CanSkip": true
@@ -1303,9 +1401,9 @@
       "Condition": "Q20000 = 1"
     },
     {
-      "OrderIdx": 101,
+      "OrderIdx": 107,
       "Number": 20005,
-      "Text": "Укажите длительность лечения данным препаратом.",
+      "Text": "<b>Укажите длительность лечения данным препаратом.</b>",
       "QuestionType": "Text",
       "ExportedQuestionFlags": {
         "CanSkip": true
@@ -1315,9 +1413,9 @@
       "Condition": "Q20000 = 1"
     },
     {
-      "OrderIdx": 102,
+      "OrderIdx": 108,
       "Number": 20006,
-      "Text": "Укажите номер серии данного препарата, который пациент применял (указан на упаковке).",
+      "Text": "<b>Укажите номер серии данного препарата, который пациент применял (указан на упаковке).</b>",
       "QuestionType": "Text",
       "ExportedQuestionFlags": {
         "CanSkip": true
@@ -1327,9 +1425,9 @@
       "Condition": "Q20000 = 1"
     },
     {
-      "OrderIdx": 103,
+      "OrderIdx": 109,
       "Number": 20007,
-      "Text": "Укажите дату возникновения нежелательного явления (приблизительную дату – месяц / год, если точная дата неизвестна).",
+      "Text": "<b>Укажите дату возникновения нежелательного явления (приблизительную дату – месяц / год, если точная дата неизвестна).</b>",
       "QuestionType": "Text",
       "ExportedQuestionFlags": {
         "CanSkip": true
@@ -1340,9 +1438,9 @@
       "TextLineCount": 3
     },
     {
-      "OrderIdx": 104,
+      "OrderIdx": 110,
       "Number": 20008,
-      "Text": "Считаете ли Вы, что нежелательное явление / жалоба на качество продукции было связано с данным препаратом?",
+      "Text": "<b>Считаете ли Вы, что нежелательное явление / жалоба на качество продукции было связано с данным препаратом?</b>",
       "QuestionType": "SingleChoice",
       "ExportedQuestionFlags": {},
       "ExportedSurveyFlags": {},
@@ -1351,9 +1449,9 @@
       "AnswerList": "Да/Нет/Затрудняюсь"
     },
     {
-      "OrderIdx": 105,
+      "OrderIdx": 111,
       "Number": 20009,
-      "Text": "Было ли данное нежелательное явление / жалоба на качество продукции репортировано в службу здравоохранения?",
+      "Text": "<b>Было ли данное нежелательное явление / жалоба на качество продукции репортировано в службу здравоохранения?</b>",
       "QuestionType": "SingleChoice",
       "ExportedQuestionFlags": {
         "CanSkip": true
@@ -1364,9 +1462,9 @@
       "AnswerList": "Да/Нет/Затрудняюсь"
     },
     {
-      "OrderIdx": 106,
+      "OrderIdx": 112,
       "Number": 20010,
-      "Text": "Был ли этот случай связан с Вами или с другим пациентом?",
+      "Text": "<b>Был ли этот случай связан с Вами или с другим пациентом?</b>",
       "QuestionType": "SingleChoice",
       "ExportedQuestionFlags": {},
       "ExportedSurveyFlags": {},
@@ -1375,9 +1473,9 @@
       "AnswerList": "AE10"
     },
     {
-      "OrderIdx": 107,
+      "OrderIdx": 113,
       "Number": 20011,
-      "Text": "Укажите пол пациента, с которым произошло данное нежелательное явление / жалоба на качество продукции.",
+      "Text": "<b>Укажите пол пациента, с которым произошло данное нежелательное явление / жалоба на качество продукции.</b>",
       "QuestionType": "SingleChoice",
       "ExportedQuestionFlags": {},
       "ExportedSurveyFlags": {},
@@ -1386,9 +1484,9 @@
       "AnswerList": "Пол"
     },
     {
-      "OrderIdx": 108,
+      "OrderIdx": 114,
       "Number": 20012,
-      "Text": "Была ли пациентка беременной или на грудном кормлении во время употребления препарата, с которым предположительно произошло нежелательное явление / жалоба на качество продукции?",
+      "Text": "<b>Была ли пациентка беременной или на грудном кормлении во время употребления препарата, с которым предположительно произошло нежелательное явление / жалоба на качество продукции?</b>",
       "QuestionType": "SingleChoice",
       "ExportedQuestionFlags": {},
       "ExportedSurveyFlags": {},
@@ -1397,9 +1495,9 @@
       "AnswerList": "Да/Нет/Затрудняюсь"
     },
     {
-      "OrderIdx": 109,
+      "OrderIdx": 115,
       "Number": 20013,
-      "Text": "Согласны ли Вы на то, чтобы сотрудники отдела по фармаконадзору компании – заказчика связались с Вами, чтобы дальше обсудить этот вопрос?",
+      "Text": "<b>Согласны ли Вы на то, чтобы сотрудники отдела по фармаконадзору компании – заказчика связались с Вами, чтобы дальше обсудить этот вопрос?</b>",
       "QuestionType": "SingleChoice",
       "ExportedQuestionFlags": {},
       "ExportedSurveyFlags": {},
@@ -1408,9 +1506,9 @@
       "AnswerList": "AE13"
     },
     {
-      "OrderIdx": 110,
+      "OrderIdx": 116,
       "Number": 20014,
-      "Text": "Укажите ФИО.",
+      "Text": "<b>Укажите ФИО.</b>",
       "QuestionType": "Text",
       "ExportedQuestionFlags": {},
       "ExportedSurveyFlags": {},
@@ -1418,9 +1516,9 @@
       "Condition": "Q20000 = 1 and Q20013 = 1"
     },
     {
-      "OrderIdx": 111,
+      "OrderIdx": 117,
       "Number": 20015,
-      "Text": "Укажите адрес.",
+      "Text": "<b>Укажите адрес.</b>",
       "QuestionType": "Text",
       "ExportedQuestionFlags": {
         "CanSkip": true
@@ -1430,9 +1528,9 @@
       "Condition": "Q20000 = 1 and Q20013 = 1"
     },
     {
-      "OrderIdx": 112,
+      "OrderIdx": 118,
       "Number": 20016,
-      "Text": "Укажите город и страну проживания.",
+      "Text": "<b>Укажите город и страну проживания.</b>",
       "QuestionType": "Text",
       "ExportedQuestionFlags": {},
       "ExportedSurveyFlags": {},
@@ -1440,9 +1538,9 @@
       "Condition": "Q20000 = 1 and Q20013 = 1"
     },
     {
-      "OrderIdx": 113,
+      "OrderIdx": 119,
       "Number": 20017,
-      "Text": "Укажите телефонный номер.",
+      "Text": "<b>Укажите телефонный номер.</b>",
       "QuestionType": "Phone",
       "ExportedQuestionFlags": {},
       "ExportedSurveyFlags": {},
@@ -1450,9 +1548,9 @@
       "Condition": "Q20000 = 1 and Q20013 = 1"
     },
     {
-      "OrderIdx": 114,
+      "OrderIdx": 120,
       "Number": 20018,
-      "Text": "Укажите адрес электронной почты.",
+      "Text": "<b>Укажите адрес электронной почты.</b>",
       "QuestionType": "Email",
       "ExportedQuestionFlags": {},
       "ExportedSurveyFlags": {},
@@ -1570,19 +1668,19 @@
         {
           "OrderIdx": 1,
           "Code": 1,
-          "Text": "Филлеры с ГК – Объем и лифтинг / Контуринг (напр., Ювидерм, Рестилайн, Теосиаль, Белотеро и т. д.)",
+          "Text": "<b>Филлеры с ГК – Объем и лифтинг / Контуринг</b> (напр., Ювидерм, Рестилайн, Теосиаль, Белотеро и т. д.)",
           "ExportedFlags": {}
         },
         {
           "OrderIdx": 2,
           "Code": 2,
-          "Text": "Филлеры с ГК – Увлажнение кожи (напр., Профайло, Ялупро, ИАЛ-Систем и т. д.)",
+          "Text": "<b>Филлеры с ГК – Увлажнение кожи</b> (напр., Профайло, Ялупро, ИАЛ-Систем и т. д.)",
           "ExportedFlags": {}
         },
         {
           "OrderIdx": 3,
           "Code": 3,
-          "Text": "Филлеры без ГК (Биостимуляторы) (напр., Скульптра, Радиесс, Эстефил, Ювилук и т. д.)",
+          "Text": "<b>Филлеры без ГК (Биостимуляторы)</b> (напр., Скульптра, Радиесс, Эстефил, Ювилук и т. д.)",
           "ExportedFlags": {}
         }
       ]
@@ -2993,7 +3091,7 @@
         {
           "OrderIdx": 19,
           "Code": 96,
-          "Text": "{Q7_1.96T}",
+          "Text": "{Q10710.96T}",
           "ExportedFlags": {}
         },
         {
@@ -3119,7 +3217,7 @@
         {
           "OrderIdx": 19,
           "Code": 96,
-          "Text": "{Q7_1.96T}",
+          "Text": "{Q10710.96T}",
           "ExportedFlags": {
             "DisableReordering": true
           }
@@ -3241,7 +3339,7 @@
         {
           "OrderIdx": 19,
           "Code": 96,
-          "Text": "{Q7_1.96T}",
+          "Text": "{Q10710.96T}",
           "ExportedFlags": {}
         }
       ]
@@ -3295,7 +3393,7 @@
         {
           "OrderIdx": 8,
           "Code": 96,
-          "Text": "{Q7_2.96T}",
+          "Text": "{Q10720.96T}",
           "ExportedFlags": {}
         },
         {
@@ -3355,7 +3453,7 @@
         {
           "OrderIdx": 8,
           "Code": 96,
-          "Text": "{Q7_2.96T}",
+          "Text": "{Q10720.96T}",
           "ExportedFlags": {
             "DisableReordering": true
           }
@@ -3411,7 +3509,7 @@
         {
           "OrderIdx": 8,
           "Code": 96,
-          "Text": "{Q7_2.96T}",
+          "Text": "{Q10720.96T}",
           "ExportedFlags": {}
         }
       ]
@@ -3471,7 +3569,7 @@
         {
           "OrderIdx": 9,
           "Code": 96,
-          "Text": "{Q7_3.96T}",
+          "Text": "{Q10730.96T}",
           "ExportedFlags": {}
         },
         {
@@ -3537,7 +3635,7 @@
         {
           "OrderIdx": 9,
           "Code": 96,
-          "Text": "{Q7_3.96T}",
+          "Text": "{Q10730.96T}",
           "ExportedFlags": {
             "DisableReordering": true
           }
@@ -3599,7 +3697,7 @@
         {
           "OrderIdx": 9,
           "Code": 96,
-          "Text": "{Q7_3.96T}",
+          "Text": "{Q10730.96T}",
           "ExportedFlags": {}
         }
       ]
@@ -4382,7 +4480,7 @@
         {
           "OrderIdx": 18,
           "Code": 96,
-          "Text": "{Q21.96T}",
+          "Text": "{Q12100.96T}",
           "ExportedFlags": {}
         }
       ]
@@ -4496,7 +4594,7 @@
         {
           "OrderIdx": 18,
           "Code": 96,
-          "Text": "{Q21.96T}",
+          "Text": "{Q12100.96T}",
           "ExportedFlags": {}
         }
       ]
@@ -4787,7 +4885,7 @@
         {
           "OrderIdx": 13,
           "Code": 96,
-          "Text": "{Q25.96T}",
+          "Text": "{Q12500.96T}",
           "ExportedFlags": {}
         }
       ]
@@ -4871,7 +4969,7 @@
         {
           "OrderIdx": 13,
           "Code": 96,
-          "Text": "{Q25.96T}",
+          "Text": "{Q12500.96T}",
           "ExportedFlags": {}
         }
       ]
@@ -5066,7 +5164,7 @@
         {
           "OrderIdx": 15,
           "Code": 96,
-          "Text": "{Q27.96T}",
+          "Text": "{Q12700.96T}",
           "ExportedFlags": {}
         }
       ]
@@ -5279,7 +5377,7 @@
         {
           "OrderIdx": 18,
           "Code": 96,
-          "Text": "{Q21.96T}",
+          "Text": "{Q12100.96T}",
           "ExportedFlags": {}
         }
       ]
@@ -5631,7 +5729,7 @@
       ]
     },
     {
-      "Name": "Q33 бренды",
+      "Name": "Q33 бренды кат.1",
       "Type": "Common",
       "AnswerItems": [
         {
@@ -5744,110 +5842,122 @@
         },
         {
           "OrderIdx": 19,
+          "Code": 96,
+          "Text": "{Q10710.96T}",
+          "ExportedFlags": {}
+        }
+      ]
+    },
+    {
+      "Name": "Q33 бренды кат.2",
+      "Type": "Common",
+      "AnswerItems": [
+        {
+          "OrderIdx": 1,
           "Code": 19,
           "Text": "Profhilo / Профайло",
           "ExportedFlags": {}
         },
         {
-          "OrderIdx": 20,
+          "OrderIdx": 2,
           "Code": 20,
           "Text": "Jalupro / Ялупро",
           "ExportedFlags": {}
         },
         {
-          "OrderIdx": 21,
+          "OrderIdx": 3,
           "Code": 21,
           "Text": "IAL-System / ИАЛ-Систем",
           "ExportedFlags": {}
         },
         {
-          "OrderIdx": 22,
+          "OrderIdx": 4,
           "Code": 22,
           "Text": "Hyalual / Гиалуаль",
           "ExportedFlags": {}
         },
         {
-          "OrderIdx": 23,
+          "OrderIdx": 5,
           "Code": 23,
           "Text": "Novacutan / Новакутан",
           "ExportedFlags": {}
         },
         {
-          "OrderIdx": 24,
+          "OrderIdx": 6,
           "Code": 24,
           "Text": "Neauvia Hydro / Ньювиа Гидро",
           "ExportedFlags": {}
         },
         {
-          "OrderIdx": 25,
+          "OrderIdx": 7,
           "Code": 25,
           "Text": "Plinest / Плинест",
           "ExportedFlags": {}
         },
         {
-          "OrderIdx": 26,
+          "OrderIdx": 8,
+          "Code": 96,
+          "Text": "{Q10720.96T}",
+          "ExportedFlags": {}
+        }
+      ]
+    },
+    {
+      "Name": "Q33 бренды кат.3",
+      "Type": "Common",
+      "AnswerItems": [
+        {
+          "OrderIdx": 1,
           "Code": 26,
           "Text": "Radiesse / Радиесс",
           "ExportedFlags": {}
         },
         {
-          "OrderIdx": 27,
+          "OrderIdx": 2,
           "Code": 27,
           "Text": "Sculptra / Скульптра",
           "ExportedFlags": {}
         },
         {
-          "OrderIdx": 28,
+          "OrderIdx": 3,
           "Code": 28,
           "Text": "AestheFill / Эстефил",
           "ExportedFlags": {}
         },
         {
-          "OrderIdx": 29,
+          "OrderIdx": 4,
           "Code": 29,
           "Text": "Juvelook / Джувелук",
           "ExportedFlags": {}
         },
         {
-          "OrderIdx": 30,
+          "OrderIdx": 5,
           "Code": 30,
           "Text": "Collost / Коллост",
           "ExportedFlags": {}
         },
         {
-          "OrderIdx": 31,
+          "OrderIdx": 6,
           "Code": 31,
           "Text": "SferoGel / СФЕРОгель",
           "ExportedFlags": {}
         },
         {
-          "OrderIdx": 32,
+          "OrderIdx": 7,
           "Code": 32,
           "Text": "Renaissance / Ренессанс",
           "ExportedFlags": {}
         },
         {
-          "OrderIdx": 33,
+          "OrderIdx": 8,
           "Code": 33,
           "Text": "Novacutan YBio / Новакутан Ю Био",
           "ExportedFlags": {}
         },
         {
-          "OrderIdx": 34,
-          "Code": 196,
-          "Text": "{Q7_1.96T}",
-          "ExportedFlags": {}
-        },
-        {
-          "OrderIdx": 35,
-          "Code": 296,
-          "Text": "{Q7_2.96T}",
-          "ExportedFlags": {}
-        },
-        {
-          "OrderIdx": 36,
-          "Code": 396,
-          "Text": "{Q7_3.96T}",
+          "OrderIdx": 9,
+          "Code": 96,
+          "Text": "{Q10730.96T}",
           "ExportedFlags": {}
         }
       ]
@@ -6038,7 +6148,7 @@
         {
           "OrderIdx": 7,
           "Code": 96,
-          "Text": "{Q37.96T}",
+          "Text": "{Q13700.96T}",
           "ExportedFlags": {}
         }
       ]
@@ -6320,7 +6430,7 @@
         {
           "OrderIdx": 10,
           "Code": 96,
-          "Text": "{Q41.96T}",
+          "Text": "{Q14100.96T}",
           "ExportedFlags": {}
         }
       ]
