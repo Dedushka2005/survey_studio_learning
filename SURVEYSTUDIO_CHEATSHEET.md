@@ -318,6 +318,8 @@ AnswerNumberFrom, AnswerNumberTo, ScriptBeforeShow, ScriptAfterAnswer, BeforeSho
   разделах 2 и 3 — ждёт проверки.
 
 **Тест HCP Perception RU (08.10.2026):**
+- ✅ `ColumnCount` у одиночного выбора: на компьютере варианты в N колонок, на телефоне — в один столбец
+  (Aesthetics v2 S4, 3 колонки, 09.10.2026).
 - ✅ Скрытие колонок таблицы с выбором `Q.columns.showOnly([...])` (Q9: остались Ювидерм + «Ни один»).
 - ✅ Автоответ таблицы скриптом перед показом: `row[99].checked = true` во всех строках + `return answered`
   — вопрос не показывается (Q9 при Q7 = «Ничего из перечисленного»).
