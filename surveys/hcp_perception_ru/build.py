@@ -55,6 +55,7 @@ COMPANIES = {
     6: 'CHA Meditech', 7: 'CLS International', 8: 'Croma-Pharma', 9: 'Dr. Korman Laboratories',
     10: 'Fidia Farmaceutici', 11: 'Galderma', 12: 'IBSA', 13: 'Institute Hyalual',
     14: 'Laboratoires Fillmed', 15: 'Laboratoires Vivacy', 16: 'LG Chem', 17: 'Laboratoires Fijie',
+    18: 'Sinclair', 19: 'Teoxane Laboratories',
 }
 ALLERGAN = 1
 CHANNELS = {
@@ -885,9 +886,12 @@ q(n(43), 'Text',
 # ----------------------------------------------------------------------------
 # AE — информация о нежелательных явлениях
 # ----------------------------------------------------------------------------
+# Блок скрыт по просьбе заказчика (ТЗ 09.10.2026): AE0 с условием false, AE1–AE18 зависят от AE0 = 1,
+# интервью завершается как полное после Q43. Вернуть блок — AE_ENABLED = True.
+AE_ENABLED = False
 YES_NO_DK = alist('Да/Нет/Затрудняюсь', {1: 'Да', 2: 'Нет', 3: 'Затрудняюсь ответить'})
 q(20000, 'SingleChoice', '<b>Хотели бы Вы сообщить дополнительную информацию о применении дермальных филлеров?</b>',
-  name='AE0', AnswerList=YES_NO)
+  name='AE0', AnswerList=YES_NO, **({} if AE_ENABLED else {'Condition': 'false'}))
 AE = 'Q20000 = 1'
 OPTIONAL = {'CanSkip': True}
 ae_items = [
