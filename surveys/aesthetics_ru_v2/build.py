@@ -161,7 +161,7 @@ q(105, 'Table_Numeric',
 
 q(106, 'SingleChoice', 'В каком городе Вы ведете основную практику в области эстетической медицины?',
   name='S4', AnswerList=alist('Города', {i + 1: city for i, city in enumerate(CITIES)} | {96: 'Другой город'}),
-  ColumnCount=2, after=screen_if([96]))
+  ColumnCount=3, after=screen_if([96]))
 
 q(107, 'SingleChoice',
   'Какой из перечисленных вариантов наилучшим образом описывает клинику эстетической медицины, в которой Вы '

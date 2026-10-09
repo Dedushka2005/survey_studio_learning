@@ -94,7 +94,7 @@
       "OutputColumnTemplate": "S4",
       "ScriptAfterAnswer": "if (Q.isChecked(96)) return screenOut();",
       "AnswerList": "Города",
-      "ColumnCount": 2
+      "ColumnCount": 3
     },
     {
       "OrderIdx": 8,
