@@ -88,13 +88,13 @@
       "OrderIdx": 7,
       "Number": 106,
       "Text": "В каком городе Вы ведете основную практику в области эстетической медицины?",
-      "QuestionType": "Dropdown_SingleChoice",
+      "QuestionType": "SingleChoice",
       "ExportedQuestionFlags": {},
       "ExportedSurveyFlags": {},
       "OutputColumnTemplate": "S4",
-      "Comment": "Выберите город из списка",
       "ScriptAfterAnswer": "if (Q.isChecked(96)) return screenOut();",
-      "AnswerList": "Города"
+      "AnswerList": "Города",
+      "ColumnCount": 3
     },
     {
       "OrderIdx": 8,

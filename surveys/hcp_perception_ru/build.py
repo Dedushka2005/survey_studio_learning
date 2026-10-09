@@ -455,6 +455,8 @@ q(n(14), 'Table_SingleChoice',
                            2: 'Да, на бренд в другой категории филлеров', 3: 'Нет', 99: 'Не знаю'}),
   before='''
 showRowsWhere(Q, function (code) { return catActive(code); });
+// одна категория в S3 — переходить в другую категорию некуда, «Да, … в другой категории» скрываем
+Q.columns.showOnly(Q.rows.visibleCount > 1 ? [1, 2, 3, 99] : [1, 3, 99]);
 return Q.rows.hasVisible ? ok : skip;
 ''')
 
@@ -463,7 +465,18 @@ q(n(14, 0, 1), 'Table_SingleChoice',
   'последние 12 месяцев?', name='Q14_1', comment='Строка — исходная категория. ' + SWITCH_NOTE,
   RowList='Категории', AnswerList=alist('Категории (на какую)', CATS), before='''
 showRowsWhere(Q, function (code) { return Q14.rows[code].visible && Q14.rows[code].isChecked(2); });
-return Q.rows.hasVisible ? ok : skip;
+if (!Q.rows.hasVisible) return skip;
+// колонки — только категории, которые врач использует (строки Q14 = категории с S3 > 0)
+let cats = Q14.rows.getVisibleCodes();
+Q.columns.showOnly(cats);
+if (cats.length === 2) {
+    // две категории — другая категория единственная, отмечаем автоматически и не показываем
+    for (let row of Q.rows.getVisible()) {
+        row[cats[0] === row.code ? cats[1] : cats[0]].checked = true;
+    }
+    return answered;
+}
+return ok;
 ''', after='''
 resetRowMarks(Q);
 for (let row of Q.rows.getVisible()) {

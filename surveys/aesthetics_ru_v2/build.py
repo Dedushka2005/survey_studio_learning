@@ -159,10 +159,9 @@ q(105, 'Table_Numeric',
   RowList=alist('Категории S3', S3_ROWS), AnswerNumberFrom=0, AnswerNumberTo=9999,
   after='if (sumRows(Q) < 15) return screenOut();')
 
-q(106, 'Dropdown_SingleChoice', 'В каком городе Вы ведете основную практику в области эстетической медицины?',
-  name='S4', comment='Выберите город из списка',
-  AnswerList=alist('Города', {i + 1: city for i, city in enumerate(CITIES)} | {96: 'Другой город'}),
-  after=screen_if([96]))
+q(106, 'SingleChoice', 'В каком городе Вы ведете основную практику в области эстетической медицины?',
+  name='S4', AnswerList=alist('Города', {i + 1: city for i, city in enumerate(CITIES)} | {96: 'Другой город'}),
+  ColumnCount=3, after=screen_if([96]))
 
 q(107, 'SingleChoice',
   'Какой из перечисленных вариантов наилучшим образом описывает клинику эстетической медицины, в которой Вы '

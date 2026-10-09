@@ -660,7 +660,7 @@
       "ExportedSurveyFlags": {},
       "OutputColumnTemplate": "Q14",
       "Comment": "Один ответ в строке.<br>Одна категория филлеров: напр., Объем и лифтинг / контуринг с ГК → Объем и лифтинг / контуринг с ГК.<br>Разные категории филлеров: напр., Объем и лифтинг / контуринг с ГК → Биостимулятор; или Увлажнение кожи с ГК → Биостимулятор.<br>Примечание: ГК означает гиалуроновая кислота.",
-      "ScriptBeforeShow": "showRowsWhere(Q, function (code) { return catActive(code); });\nreturn Q.rows.hasVisible ? ok : skip;",
+      "ScriptBeforeShow": "showRowsWhere(Q, function (code) { return catActive(code); });\n// одна категория в S3 — переходить в другую категорию некуда, «Да, … в другой категории» скрываем\nQ.columns.showOnly(Q.rows.visibleCount > 1 ? [1, 2, 3, 99] : [1, 3, 99]);\nreturn Q.rows.hasVisible ? ok : skip;",
       "RowList": "Категории",
       "AnswerList": "Q14"
     },
@@ -673,7 +673,7 @@
       "ExportedSurveyFlags": {},
       "OutputColumnTemplate": "Q14_1",
       "Comment": "Строка — исходная категория. Одна категория филлеров: напр., Объем и лифтинг / контуринг с ГК → Объем и лифтинг / контуринг с ГК.<br>Разные категории филлеров: напр., Объем и лифтинг / контуринг с ГК → Биостимулятор; или Увлажнение кожи с ГК → Биостимулятор.<br>Примечание: ГК означает гиалуроновая кислота.",
-      "ScriptBeforeShow": "showRowsWhere(Q, function (code) { return Q14.rows[code].visible && Q14.rows[code].isChecked(2); });\nreturn Q.rows.hasVisible ? ok : skip;",
+      "ScriptBeforeShow": "showRowsWhere(Q, function (code) { return Q14.rows[code].visible && Q14.rows[code].isChecked(2); });\nif (!Q.rows.hasVisible) return skip;\n// колонки — только категории, которые врач использует (строки Q14 = категории с S3 > 0)\nlet cats = Q14.rows.getVisibleCodes();\nQ.columns.showOnly(cats);\nif (cats.length === 2) {\n    // две категории — другая категория единственная, отмечаем автоматически и не показываем\n    for (let row of Q.rows.getVisible()) {\n        row[cats[0] === row.code ? cats[1] : cats[0]].checked = true;\n    }\n    return answered;\n}\nreturn ok;",
       "ScriptAfterAnswer": "resetRowMarks(Q);\nfor (let row of Q.rows.getVisible()) {\n    if (row.isChecked(row.code)) {\n        return rowError(Q, row.code, 'Выберите категорию, отличную от исходной: «' + row.plainText + '».');\n    }\n}",
       "RowList": "Категории",
       "AnswerList": "Категории (на какую)"
