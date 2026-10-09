@@ -929,7 +929,8 @@
       "ExportedQuestionFlags": {},
       "ExportedSurveyFlags": {},
       "OutputColumnTemplate": "AE0",
-      "AnswerList": "Да/Нет"
+      "AnswerList": "Да/Нет",
+      "Condition": "false"
     },
     {
       "OrderIdx": 71,
