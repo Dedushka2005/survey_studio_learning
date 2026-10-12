@@ -148,18 +148,30 @@ function requireChoiceRowText(q, code) {
     return ok;
 }
 
-// Строка «Другое» таблицы с выбором, где отметку снимают, стирая текст:
-// текст и ответ должны быть вместе, иначе — ошибка «дайте ответ в строке».
-// В пару — скрипт во время показа clear_row_on_empty_text() из ss_builder: стёрли текст —
-// отметки строки снимаются на экране (без него отмеченную радиокнопку не убрать).
+// Строка «Другое» таблицы с выбором (снять радиокнопку в таблице респондент не может —
+// проверено, скриптом в браузере тоже нельзя, поэтому снимаем на сервере):
+// вписан текст без ответа — ошибка; ответ без текста — один раз предупреждаем,
+// при повторном «Далее» с тем же ответом снимаем отметки строки.
 // Использование в скрипте после ответа: return otherChoiceRow(Q, 96);
 function otherChoiceRow(q, code) {
     let row = q.rows[code];
     if (row === undefined || !row.visible) return ok;
-    let answered = row.getCheckedCodes().length > 0;
-    if (answered !== Boolean(row.openValueTxt)) {
-        return error('Пожалуйста, дайте ответ в строке «' + row.plainText + '»');
+    if (isPostProcessing() || isValidation()) return ok;
+    let key = 'otherRow_' + q.number + '_' + code;
+    let checked = row.getCheckedCodes();
+    if (row.openValueTxt) {
+        V[key] = '';
+        if (checked.length === 0) return error('Пожалуйста, дайте ответ в строке «Другое»');
+        return ok;
     }
+    if (checked.length === 0) { V[key] = ''; return ok; }
+    if (V[key] !== checked.join(',')) {
+        V[key] = checked.join(',');
+        return error('Вы не вписали свой вариант в строке «Другое». '
+            + 'Если нажмете «Далее», ответ в этой строке будет удален.');
+    }
+    V[key] = '';
+    for (let c of checked) row[c].checked = false;
     return ok;
 }
 

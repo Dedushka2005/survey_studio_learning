@@ -44,30 +44,6 @@ def js_str(text):
     return json.dumps(text, ensure_ascii=False)
 
 
-def clear_row_on_empty_text(number, code):
-    """Скрипт во время показа (браузер): в таблице с выбором стёрли текст в строке «Другое» —
-    снять отметки этой строки на экране. В пару — otherChoiceRow() после ответа.
-    Опирается на data-атрибуты разметки (data-question-number, data-row-code) из базы знаний.
-    """
-    return f'''
-// Стёрли текст в строке «Другое» ({code}) — снимаем отметки в этой строке
-var flag = 'clearRow_{number}_{code}';
-if (!window[flag]) {{
-    window[flag] = true;
-    document.addEventListener('input', function (e) {{
-        var t = e.target;
-        if (!t.closest || !t.closest("[data-question-number='{number}']")) return;
-        var row = t.closest("[data-row-code='{code}']");
-        if (!row || t.value.trim() !== '') return;
-        row.querySelectorAll('input[type=radio]:checked, input[type=checkbox]:checked').forEach(function (r) {{
-            r.checked = false;
-            r.dispatchEvent(new Event('change', {{ bubbles: true }}));
-        }});
-    }});
-}}
-'''
-
-
 def _checked_any(codes):
     return ' || '.join(f'Q.isChecked({c})' for c in codes)
 
