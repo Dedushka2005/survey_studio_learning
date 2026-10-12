@@ -325,7 +325,11 @@ AnswerNumberFrom, AnswerNumberTo, ScriptBeforeShow, ScriptAfterAnswer, BeforeSho
   API системы (`Q`, `V`) там нет — только DOM. Зацепки в разметке — data-атрибуты из `kb/cawi_3014.md`
   (`data-question-number`, `data-row-code`, `data-part`). Снятие радиокнопки так (`input.checked = false` +
   событие `change`) на макете работает, ❌ **в SURVEYSTUDIO отметка не снялась** (тест HCP Q8, 12.10.2026) —
-  причина выясняется (разметка строки или состояние экрана не через `input`). В базе знаний рецепта снятия отметки нет;
+  Причина: экран на Vue, отметку рисует `<span data-part="marker" data-checked="true">` по внутреннему
+  состоянию, а `<input type="radio" class="sr-only">` — лишь отражение; менять `input.checked` бесполезно.
+  Разметка строки таблицы (HCP Q10810): `[data-part=row][data-row-code=96]` → ячейки
+  `<label data-part=cell data-cell-code=…>`; поле текста `input#q10810_r96_ovt` (`q<номер>_r<код>_ovt`);
+  `data-question-number` есть. При отметке без текста система сама пишет у поля «Требуется заполнить поле ввода». В базе знаний рецепта снятия отметки нет;
   `row[c].checked = false` на сервере — по аналогии с `Q[2].checked = calc(…)` из `kb/help_scripts_2001.md`.
 - Частые ошибки (найдены при ревью): `exitScreen()` без `return` — интервью не завершится;
   `visibleCount > 1 ? ok : skip` пропускает вопрос с одной строкой — нужен `hasVisible`; табличный вопрос без
