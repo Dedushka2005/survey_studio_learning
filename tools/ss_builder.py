@@ -37,6 +37,9 @@ FIXED = {'DisableReordering': True}                   # не перемешив�
 NO_LOOP = {'DisableRepeat': True}                     # не использовать в циклах
 OPT_ROW = {'CustomRowValidation': True}               # строка таблицы необязательна
 OTHER_ROW = {'OpenValueTxt': True, 'AllowEmptyOpenValue': True, 'DisableReordering': True}
+# строка «Другое (укажите)» в таблице с выбором: необязательная, с текстом, не перемешивается;
+# в вопросе — after='return otherChoiceRow(Q, 96);' (save() проверяет, что скрипт есть)
+OTHER_CHOICE_ROW = OTHER_ROW | OPT_ROW
 
 
 def js_str(text):
@@ -227,8 +230,31 @@ class Questionnaire:
         for a in data['AnswerLists']:
             codes = [i['Code'] for i in a['AnswerItems']]
             assert len(codes) == len(set(codes)), f"список «{a['Name']}»: повторяются коды"
+        self.check_other_choice_rows(data)
         self.check_references(data)
         self.check_js_syntax(data)
+
+    @staticmethod
+    def check_other_choice_rows(data):
+        """Таблица с выбором и строкой «Другое (укажите)»: нужен скрипт otherChoiceRow(Q, код) после ответа
+        (отмеченную по ошибке радиокнопку иначе не снять) и необязательная строка (OTHER_CHOICE_ROW)."""
+        lists = {a['Name']: a for a in data['AnswerLists']}
+        problems = []
+        for x in data['Questions']:
+            if x['QuestionType'] not in ('Table_SingleChoice', 'Table_MultipleChoice') or not x.get('RowList'):
+                continue
+            for item in lists[x['RowList']]['AnswerItems']:
+                fl = item.get('ExportedFlags', {})
+                if not fl.get('OpenValueTxt'):
+                    continue
+                code = item['Code']
+                if f'otherChoiceRow(Q, {code})' not in (x.get('ScriptAfterAnswer') or ''):
+                    problems.append(f"Q{x['Number']}: строка {code} «Другое» — добавьте после ответа "
+                                    f"return otherChoiceRow(Q, {code});")
+                if not (fl.get('AllowEmptyOpenValue') and fl.get('CustomRowValidation')):
+                    problems.append(f"Q{x['Number']}: строка {code} «Другое» должна быть необязательной "
+                                    f"(флаги OTHER_CHOICE_ROW)")
+        assert not problems, '\n'.join(problems)
 
     @staticmethod
     def check_references(data):

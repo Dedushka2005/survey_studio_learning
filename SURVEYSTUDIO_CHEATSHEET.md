@@ -192,15 +192,16 @@ AnswerNumberFrom, AnswerNumberTo, ScriptBeforeShow, ScriptAfterAnswer, BeforeSho
   Правки вносятся в генератор, затем файл пересобирается. Новая анкета — копия `surveys/_template/`.
 - **Общая библиотека** (использовать во всех анкетах, пополнять удачными находками):
   - `tools/ss_builder.py` — сборка: `Questionnaire(имя)`, `q(...)`, `alist(...)`, `screen_if([коды])`,
-    `refuse_if([коды])`, наборы флагов `OTHER_TXT`, `BLOCKING`, `FIXED`, `NO_LOOP`, `OPT_ROW`, `OTHER_ROW`.
+    `refuse_if([коды])`, наборы флагов `OTHER_TXT`, `BLOCKING`, `FIXED`, `NO_LOOP`, `OPT_ROW`, `OTHER_ROW`,
+    `OTHER_CHOICE_ROW` (строка «Другое» в таблице с выбором).
     `save()` проверяет уникальность номеров/имён/кодов, ссылки на списки и **синтаксис всех скриптов** (Node.js).
   - `tools/ss_lib.js` — JS-функции, автоматически попадают в раздел «Функции» каждой анкеты:
     `screenOut()`, `refuseOut()`, `numRow(q, code)`, `sumRows(q)`, `showRowsWhere(q, fn)`,
     `showAnswersWhere(q, fn)`, `requireRowText(q, code)`, `copyOtherText(src, dst, code)`,
     `checkedText(q)`, `findByAliases(text, aliases, codes)`,
     `autoAnswerIfSingle(q)`, `autoFillIfSingle(q, total)`, `requireSum(q, target)`, `rowError(q, code, msg)`,
-    `resetRowMarks(q)`, `requireChoiceRowText(q, code)` (строка «Другое» в таблице с выбором),
-    `otherChoiceRow(q, code)` (то же, но ответ без текста: предупредить, повторное «Далее» — снять отметку),
+    `resetRowMarks(q)`, **`otherChoiceRow(q, code)`** (строка «Другое» в таблице с выбором — стандарт, см. раздел 8;
+    старая `requireChoiceRowText()` устарела),
     `softWarning(q, condition, msg)` (нестрогая проверка: предупредить один раз, повторное «Далее» пропускает).
   - `save()` также проверяет, что вопросы из скриптов (`Q<номер>`, имена шаблонов) и условий существуют.
     Тексты скринаута/отказа задаются в `Questionnaire(screen_text=…, refuse_text=…)`.
@@ -219,11 +220,35 @@ AnswerNumberFrom, AnswerNumberTo, ScriptBeforeShow, ScriptAfterAnswer, BeforeSho
   Выделения в docx удобно вытащить скриптом по `w:b`/`w:u` в `word/document.xml`.
 - **Мультивыбор с «Другое (укажите)» по нескольким объектам — не таблицей**, а циклом простых вопросов
   (в таблице у колонки «Другое» нет поля для текста, уточнение пришлось бы выносить на отдельный экран).
-- **Строка «Другое» в таблице с выбором — как убрать ошибочную отметку** (HCP Q8, 12.10.2026, решение
-  пользователя): радиокнопку в таблице не снять ни кликом, ни скриптом в браузере (см. раздел 9), поэтому
-  `after='return otherChoiceRow(Q, 96);'`: ответ без текста — один раз предупреждаем «Вы не вписали свой
-  вариант… Если нажмете «Далее», ответ в этой строке будет удален», повторное «Далее» с тем же ответом —
-  отметки строки снимаются на сервере; текст без ответа — ошибка «дайте ответ в строке».
+- **Строка «Другое (укажите)» в таблице с выбором — всегда так** (стандарт с 12.10.2026, проверено в HCP Q8):
+  строка `{96: OTHER_CHOICE_ROW}` (необязательная, с текстом, не перемешивается) +
+  `after='return otherChoiceRow(Q, 96);'`. Логика: текст без ответа — ошибка «дайте ответ в строке»;
+  ответ без текста — первое «Далее» предупреждает «Вы не вписали свой вариант… ответ в этой строке будет
+  удален», повторное «Далее» снимает отметку на сервере (радиокнопку в таблице респондент сам не снимет).
+  `save()` падает, если в таблице с выбором есть строка с текстом без этого скрипта или строка обязательная.
+  Другие проверки в том же вопросе — раньше, `return otherChoiceRow(Q, 96);` — последней строкой.
+  Для ручной вставки в систему (без функции в «Функциях») — самодостаточный вариант:
+  ```js
+  let row = Q.rows[96];
+  if (row === undefined || !row.visible) return ok;
+  if (isPostProcessing() || isValidation()) return ok;
+  let key = 'otherRow_' + Q.number + '_96';
+  let checked = row.getCheckedCodes();
+  if (row.openValueTxt) {
+      V[key] = '';
+      if (checked.length === 0) return error('Пожалуйста, дайте ответ в строке «Другое»');
+      return ok;
+  }
+  if (checked.length === 0) { V[key] = ''; return ok; }
+  if (V[key] !== checked.join(',')) {
+      V[key] = checked.join(',');
+      return error('Вы не вписали свой вариант в строке «Другое». '
+          + 'Если нажмете «Далее», ответ в этой строке будет удален.');
+  }
+  V[key] = '';
+  for (let c of checked) row[c].checked = false;
+  return ok;
+  ```
 - Числовые границы задаём по смыслу, с запасом (мл, штуки — до 9999), а не «до 100» по умолчанию.
 - Строку «Прочее (укажите)» в числовой таблице делаем необязательной (`CustomRowValidation` + `AllowEmptyOpenValue`)
   и проверяем `requireRowText()`: число без текста или текст без числа — ошибка.
