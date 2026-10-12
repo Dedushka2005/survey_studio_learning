@@ -19,7 +19,7 @@ import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(HERE, '..', '..', 'tools'))
-from ss_builder import (Questionnaire, screen_if, refuse_if, js_str,  # noqa: E402
+from ss_builder import (Questionnaire, screen_if, refuse_if, js_str, clear_row_on_empty_text,  # noqa: E402
                         OTHER_TXT, BLOCKING, FIXED, OPT_ROW)
 
 # ----------------------------------------------------------------------------
@@ -380,7 +380,8 @@ for c in CATS:
              'конкретного пациента?</p>', name=f'Q8_{c}',
       comment='Один ответ в каждой строке. Строку «Другое» заполните, только если хотите добавить свою '
               'характеристику.', Condition=cat_cond(c),
-      RowList='Q8 строки', AnswerList='Важность', after='return requireChoiceRowText(Q, 96);')
+      RowList='Q8 строки', AnswerList='Важность', after='return otherChoiceRow(Q, 96);',
+      client=clear_row_on_empty_text(n(8, c), 96))
 
     q(n(9, c), 'Table_SingleChoice',
       head + '<p>Какой <b>один бренд у Вас сильнее всего ассоциируется</b> с каждой характеристикой?</p>',

@@ -200,6 +200,7 @@ AnswerNumberFrom, AnswerNumberTo, ScriptBeforeShow, ScriptAfterAnswer, BeforeSho
     `checkedText(q)`, `findByAliases(text, aliases, codes)`,
     `autoAnswerIfSingle(q)`, `autoFillIfSingle(q, total)`, `requireSum(q, target)`, `rowError(q, code, msg)`,
     `resetRowMarks(q)`, `requireChoiceRowText(q, code)` (строка «Другое» в таблице с выбором),
+    `otherChoiceRow(q, code)` (то же, но пустой текст = снять отметки строки, без ошибки),
     `softWarning(q, condition, msg)` (нестрогая проверка: предупредить один раз, повторное «Далее» пропускает).
   - `save()` также проверяет, что вопросы из скриптов (`Q<номер>`, имена шаблонов) и условий существуют.
     Тексты скринаута/отказа задаются в `Questionnaire(screen_text=…, refuse_text=…)`.
@@ -218,6 +219,11 @@ AnswerNumberFrom, AnswerNumberTo, ScriptBeforeShow, ScriptAfterAnswer, BeforeSho
   Выделения в docx удобно вытащить скриптом по `w:b`/`w:u` в `word/document.xml`.
 - **Мультивыбор с «Другое (укажите)» по нескольким объектам — не таблицей**, а циклом простых вопросов
   (в таблице у колонки «Другое» нет поля для текста, уточнение пришлось бы выносить на отдельный экран).
+- **Строка «Другое» в таблице с выбором — стёрли текст, снимаем ответ** (HCP Q8, 12.10.2026, просьба
+  пользователя: отмеченную по ошибке радиокнопку иначе не убрать). Две части:
+  `q(..., after='return otherChoiceRow(Q, 96);', client=clear_row_on_empty_text(номер, 96))` —
+  в браузере при стирании текста снимаются отметки строки, на сервере после ответа то же самое (страховка,
+  если экран не синхронизировался); вписан текст без ответа — ошибка.
 - Числовые границы задаём по смыслу, с запасом (мл, штуки — до 9999), а не «до 100» по умолчанию.
 - Строку «Прочее (укажите)» в числовой таблице делаем необязательной (`CustomRowValidation` + `AllowEmptyOpenValue`)
   и проверяем `requireRowText()`: число без текста или текст без числа — ошибка.
@@ -314,6 +320,11 @@ AnswerNumberFrom, AnswerNumberTo, ScriptBeforeShow, ScriptAfterAnswer, BeforeSho
     ⚠️ Проверить на сохранённом интервью в проекте: постобработка чистит ответы, не соответствующие условиям,
     — ответы вопроса с условием `false` и зависящих от него итераций цикла могут пропасть. Если пропадают —
     использовать первую схему.
+- ⚠️ **Скрипт во время показа** (`ScriptClientSide`, в сборщике `q(..., client=…)`) выполняется в браузере,
+  API системы (`Q`, `V`) там нет — только DOM. Зацепки в разметке — data-атрибуты из `kb/cawi_3014.md`
+  (`data-question-number`, `data-row-code`, `data-part`). Снятие радиокнопки так (`input.checked = false` +
+  событие `change`) проверено только на макете, не в SURVEYSTUDIO. В базе знаний рецепта снятия отметки нет;
+  `row[c].checked = false` на сервере — по аналогии с `Q[2].checked = calc(…)` из `kb/help_scripts_2001.md`.
 - Частые ошибки (найдены при ревью): `exitScreen()` без `return` — интервью не завершится;
   `visibleCount > 1 ? ok : skip` пропускает вопрос с одной строкой — нужен `hasVisible`; табличный вопрос без
   видимых строк надо явно пропускать (`return Q.rows.hasVisible ? ok : skip;`); исключающему ответу без групп

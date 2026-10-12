@@ -148,6 +148,23 @@ function requireChoiceRowText(q, code) {
     return ok;
 }
 
+// Строка «Другое» таблицы с выбором, вариант «пустой текст = строки нет»:
+// вписан текст — нужен ответ в строке; текста нет — отметки в строке снимаем (без ошибки).
+// В пару — скрипт во время показа clear_row_on_empty_text() из ss_builder (снимает отметку на экране).
+// Использование в скрипте после ответа: return otherChoiceRow(Q, 96);
+function otherChoiceRow(q, code) {
+    let row = q.rows[code];
+    if (row === undefined || !row.visible) return ok;
+    if (!row.openValueTxt) {
+        for (let c of row.getCheckedCodes()) row[c].checked = false;
+        return ok;
+    }
+    if (row.getCheckedCodes().length === 0) {
+        return error('Пожалуйста, дайте ответ в строке «' + row.plainText + '»');
+    }
+    return ok;
+}
+
 // Нестрогая проверка: при первом «Далее» показать предупреждение, при повторном нажатии
 // с теми же ответами — пропустить. Если ответ изменили и условие снова выполняется — предупредить снова.
 // Использование в скрипте после ответа:
