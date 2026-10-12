@@ -324,7 +324,8 @@ AnswerNumberFrom, AnswerNumberTo, ScriptBeforeShow, ScriptAfterAnswer, BeforeSho
 - ⚠️ **Скрипт во время показа** (`ScriptClientSide`, в сборщике `q(..., client=…)`) выполняется в браузере,
   API системы (`Q`, `V`) там нет — только DOM. Зацепки в разметке — data-атрибуты из `kb/cawi_3014.md`
   (`data-question-number`, `data-row-code`, `data-part`). Снятие радиокнопки так (`input.checked = false` +
-  событие `change`) проверено только на макете, не в SURVEYSTUDIO. В базе знаний рецепта снятия отметки нет;
+  событие `change`) на макете работает, ❌ **в SURVEYSTUDIO отметка не снялась** (тест HCP Q8, 12.10.2026) —
+  причина выясняется (разметка строки или состояние экрана не через `input`). В базе знаний рецепта снятия отметки нет;
   `row[c].checked = false` на сервере — по аналогии с `Q[2].checked = calc(…)` из `kb/help_scripts_2001.md`.
 - Частые ошибки (найдены при ревью): `exitScreen()` без `return` — интервью не завершится;
   `visibleCount > 1 ? ok : skip` пропускает вопрос с одной строкой — нужен `hasVisible`; табличный вопрос без
