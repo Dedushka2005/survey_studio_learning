@@ -38,7 +38,8 @@ NO_LOOP = {'DisableRepeat': True}                     # не использов�
 OPT_ROW = {'CustomRowValidation': True}               # строка таблицы необязательна
 OTHER_ROW = {'OpenValueTxt': True, 'AllowEmptyOpenValue': True, 'DisableReordering': True}
 # строка «Другое (укажите)» в таблице с выбором: необязательная, с текстом, не перемешивается;
-# в вопросе — after='return otherChoiceRow(Q, 96);' (save() проверяет, что скрипт есть)
+# в вопросе после ответа (save() проверяет): один ответ — 'return otherChoiceRow(Q, 96);',
+# несколько ответов — 'return requireChoiceRowText(Q, 96);' (галочку респондент снимает сам)
 OTHER_CHOICE_ROW = OTHER_ROW | OPT_ROW
 
 
@@ -236,8 +237,9 @@ class Questionnaire:
 
     @staticmethod
     def check_other_choice_rows(data):
-        """Таблица с выбором и строкой «Другое (укажите)»: нужен скрипт otherChoiceRow(Q, код) после ответа
-        (отмеченную по ошибке радиокнопку иначе не снять) и необязательная строка (OTHER_CHOICE_ROW)."""
+        """Таблица с выбором и строкой «Другое (укажите)»: нужна необязательная строка (OTHER_CHOICE_ROW) и
+        скрипт после ответа — otherChoiceRow(Q, код) для одного ответа (радиокнопку иначе не снять),
+        requireChoiceRowText(Q, код) для нескольких ответов (галочку снимают сами)."""
         lists = {a['Name']: a for a in data['AnswerLists']}
         problems = []
         for x in data['Questions']:
@@ -248,9 +250,10 @@ class Questionnaire:
                 if not fl.get('OpenValueTxt'):
                     continue
                 code = item['Code']
-                if f'otherChoiceRow(Q, {code})' not in (x.get('ScriptAfterAnswer') or ''):
+                func = 'otherChoiceRow' if x['QuestionType'] == 'Table_SingleChoice' else 'requireChoiceRowText'
+                if f'{func}(Q, {code})' not in (x.get('ScriptAfterAnswer') or ''):
                     problems.append(f"Q{x['Number']}: строка {code} «Другое» — добавьте после ответа "
-                                    f"return otherChoiceRow(Q, {code});")
+                                    f"return {func}(Q, {code});")
                 if not (fl.get('AllowEmptyOpenValue') and fl.get('CustomRowValidation')):
                     problems.append(f"Q{x['Number']}: строка {code} «Другое» должна быть необязательной "
                                     f"(флаги OTHER_CHOICE_ROW)")
