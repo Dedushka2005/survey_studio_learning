@@ -132,9 +132,9 @@ function resetRowMarks(q) {
     for (let row of q.rows.getVisible()) row.text = row.plainText;
 }
 
-// Строка «Другое» таблицы с выбором (необязательная строка с полем для текста):
+// Строка «Другое» таблицы с НЕСКОЛЬКИМИ ответами (галочку респондент снимает сам):
 // вписан текст — нужен ответ в строке; есть ответ — нужен текст.
-// Использование в скрипте после ответа: return requireChoiceRowText(Q, 96);
+// Для таблицы с ОДНИМ ответом — otherChoiceRow() (там радиокнопку без текста иначе не снять).
 function requireChoiceRowText(q, code) {
     let row = q.rows[code];
     if (row === undefined || !row.visible) return ok;
@@ -145,6 +145,36 @@ function requireChoiceRowText(q, code) {
     if (answered && !row.openValueTxt) {
         return error('Пожалуйста, уточните вариант «' + row.plainText + '»');
     }
+    return ok;
+}
+
+// ✅ СТАНДАРТ для строки «Другое (укажите)» в таблице с ОДНИМ ответом (HCP Q8, проверено 12.10.2026).
+// В таблице с несколькими ответами — requireChoiceRowText().
+// Снять радиокнопку в таблице респондент не может (скриптом в браузере тоже нельзя), поэтому снимаем на сервере:
+// вписан текст без ответа — ошибка; ответ без текста — один раз предупреждаем,
+// при повторном «Далее» с тем же ответом снимаем отметки строки.
+// Использование в скрипте после ответа: return otherChoiceRow(Q, 96);
+// Если в вопросе есть и другие проверки — их раньше, а otherChoiceRow последней строкой (return otherChoiceRow(…)).
+// Строка — флаги OTHER_CHOICE_ROW из ss_builder (необязательная, с текстом, не перемешивается).
+function otherChoiceRow(q, code) {
+    let row = q.rows[code];
+    if (row === undefined || !row.visible) return ok;
+    if (isPostProcessing() || isValidation()) return ok;
+    let key = 'otherRow_' + q.number + '_' + code;
+    let checked = row.getCheckedCodes();
+    if (row.openValueTxt) {
+        V[key] = '';
+        if (checked.length === 0) return error('Пожалуйста, дайте ответ в строке «Другое»');
+        return ok;
+    }
+    if (checked.length === 0) { V[key] = ''; return ok; }
+    if (V[key] !== checked.join(',')) {
+        V[key] = checked.join(',');
+        return error('Вы не вписали свой вариант в строке «Другое». '
+            + 'Если нажмете «Далее», ответ в этой строке будет удален.');
+    }
+    V[key] = '';
+    for (let c of checked) row[c].checked = false;
     return ok;
 }
 

@@ -37,6 +37,10 @@ FIXED = {'DisableReordering': True}                   # не перемешив�
 NO_LOOP = {'DisableRepeat': True}                     # не использовать в циклах
 OPT_ROW = {'CustomRowValidation': True}               # строка таблицы необязательна
 OTHER_ROW = {'OpenValueTxt': True, 'AllowEmptyOpenValue': True, 'DisableReordering': True}
+# строка «Другое (укажите)» в таблице с выбором: необязательная, с текстом, не перемешивается;
+# в вопросе после ответа (save() проверяет): один ответ — 'return otherChoiceRow(Q, 96);',
+# несколько ответов — 'return requireChoiceRowText(Q, 96);' (галочку респондент снимает сам)
+OTHER_CHOICE_ROW = OTHER_ROW | OPT_ROW
 
 
 def js_str(text):
@@ -120,10 +124,11 @@ class Questionnaire:
 
     # ----------------------------------------------------------------- вопросы
     def q(self, number, qtype, text, name=None, comment=None, flags=None, survey_flags=None,
-          before=None, after=None, before_actions=None, after_actions=None, **props):
+          before=None, after=None, client=None, before_actions=None, after_actions=None, **props):
         """Добавить вопрос в конец анкеты.
 
         name — имя переменной в массиве; before/after — скрипты перед показом / после ответа;
+        client — скрипт во время показа (выполняется в браузере, API системы недоступен);
         props — любые свойства вопроса из формата файла (AnswerList, RowList, Condition, …).
         """
         item = {
@@ -142,6 +147,8 @@ class Questionnaire:
             item['ScriptBeforeShow'] = before.strip()
         if after:
             item['ScriptAfterAnswer'] = after.strip()
+        if client:
+            item['ScriptClientSide'] = client.strip()
         for key, acts in (('BeforeShowActions', before_actions), ('AfterAnswerActions', after_actions)):
             if acts:
                 item[key] = [dict(a, OrderIdx=i + 1) for i, a in enumerate(acts)]
@@ -224,8 +231,33 @@ class Questionnaire:
         for a in data['AnswerLists']:
             codes = [i['Code'] for i in a['AnswerItems']]
             assert len(codes) == len(set(codes)), f"список «{a['Name']}»: повторяются коды"
+        self.check_other_choice_rows(data)
         self.check_references(data)
         self.check_js_syntax(data)
+
+    @staticmethod
+    def check_other_choice_rows(data):
+        """Таблица с выбором и строкой «Другое (укажите)»: нужна необязательная строка (OTHER_CHOICE_ROW) и
+        скрипт после ответа — otherChoiceRow(Q, код) для одного ответа (радиокнопку иначе не снять),
+        requireChoiceRowText(Q, код) для нескольких ответов (галочку снимают сами)."""
+        lists = {a['Name']: a for a in data['AnswerLists']}
+        problems = []
+        for x in data['Questions']:
+            if x['QuestionType'] not in ('Table_SingleChoice', 'Table_MultipleChoice') or not x.get('RowList'):
+                continue
+            for item in lists[x['RowList']]['AnswerItems']:
+                fl = item.get('ExportedFlags', {})
+                if not fl.get('OpenValueTxt'):
+                    continue
+                code = item['Code']
+                func = 'otherChoiceRow' if x['QuestionType'] == 'Table_SingleChoice' else 'requireChoiceRowText'
+                if f'{func}(Q, {code})' not in (x.get('ScriptAfterAnswer') or ''):
+                    problems.append(f"Q{x['Number']}: строка {code} «Другое» — добавьте после ответа "
+                                    f"return {func}(Q, {code});")
+                if not (fl.get('AllowEmptyOpenValue') and fl.get('CustomRowValidation')):
+                    problems.append(f"Q{x['Number']}: строка {code} «Другое» должна быть необязательной "
+                                    f"(флаги OTHER_CHOICE_ROW)")
+        assert not problems, '\n'.join(problems)
 
     @staticmethod
     def check_references(data):
@@ -283,7 +315,7 @@ class Questionnaire:
         for key in ('ScriptBeforeShow', 'ScriptAfterAnswer'):
             scripts.append(('глобальный ' + key, data.get(key, ''), True))
         for x in data['Questions']:
-            for key in ('ScriptBeforeShow', 'ScriptAfterAnswer'):
+            for key in ('ScriptBeforeShow', 'ScriptAfterAnswer', 'ScriptClientSide'):
                 if x.get(key):
                     scripts.append((f"Q{x['Number']} {key}", x[key], True))
         checker = ("const s=JSON.parse(require('fs').readFileSync(process.argv[1],'utf8'));let bad=0;"
