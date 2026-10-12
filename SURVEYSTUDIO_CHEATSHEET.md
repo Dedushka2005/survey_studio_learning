@@ -329,7 +329,10 @@ AnswerNumberFrom, AnswerNumberTo, ScriptBeforeShow, ScriptAfterAnswer, BeforeSho
   состоянию, а `<input type="radio" class="sr-only">` — лишь отражение; менять `input.checked` бесполезно.
   Разметка строки таблицы (HCP Q10810): `[data-part=row][data-row-code=96]` → ячейки
   `<label data-part=cell data-cell-code=…>`; поле текста `input#q10810_r96_ovt` (`q<номер>_r<код>_ovt`);
-  `data-question-number` есть. При отметке без текста система сама пишет у поля «Требуется заполнить поле ввода». В базе знаний рецепта снятия отметки нет;
+  `data-question-number` есть. При отметке без текста система сама пишет у поля «Требуется заполнить поле ввода».
+  ❌ Повторный клик по отмеченной радиокнопке таблицы отметку не снимает (проверено `label.click()`).
+  Сборка Vue продакшен (`__vueParentComponent` нет, есть только `__vue_app__` у корня). Вывод: снять отметку
+  из браузера штатно нельзя — снимаем на сервере скриптом после ответа (`row[c].checked = false`). В базе знаний рецепта снятия отметки нет;
   `row[c].checked = false` на сервере — по аналогии с `Q[2].checked = calc(…)` из `kb/help_scripts_2001.md`.
 - Частые ошибки (найдены при ревью): `exitScreen()` без `return` — интервью не завершится;
   `visibleCount > 1 ? ok : skip` пропускает вопрос с одной строкой — нужен `hasVisible`; табличный вопрос без
