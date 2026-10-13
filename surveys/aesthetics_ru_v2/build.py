@@ -415,7 +415,7 @@ return Q.rows.hasVisible ? ok : skip;
       Condition=cat_cond(c), AnswerList=alist(f'Q11 цикл кат.{c}', brand_named), flags={'SkipExport': True},
       before=f'return pickLowScoreBrands(Q, Q10_{c}, {c});')
     q(n(11, c), 'Text',
-      head + '<p>По какой причине Вы оценили <b>«{Бренд}»</b> на <b>{Оценка}</b> из 10 баллов?</p>',
+      head + 'По какой причине Вы оценили <b>«{Бренд}»</b> на <b>{Оценка}</b> из 10 баллов?',
       name=f'Q11_{c}_{{3}}', comment='Опишите причину своими словами', TextLineCount=3,
       before=f'''
 V['Бренд'] = brandName({c}, Q.sourceAnswerCode);
