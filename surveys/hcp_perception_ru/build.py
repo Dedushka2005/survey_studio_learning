@@ -55,7 +55,7 @@ COMPANIES = {
     6: 'CHA Meditech', 7: 'CLS International', 8: 'Croma-Pharma', 9: 'Dr. Korman Laboratories',
     10: 'Fidia Farmaceutici', 11: 'Galderma', 12: 'IBSA', 13: 'Institute Hyalual',
     14: 'Laboratoires Fillmed', 15: 'Laboratoires Vivacy', 16: 'LG Chem', 17: 'Laboratoires Fijie',
-    18: 'Sinclair', 19: 'Teoxane Laboratories',
+    18: 'Sinclair', 19: 'Teoxane Laboratories', 20: 'Merz Aesthetics',
 }
 ALLERGAN = 1
 CHANNELS = {
