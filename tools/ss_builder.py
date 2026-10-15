@@ -177,6 +177,23 @@ class Questionnaire:
                       name='Rid', AnswerNumberFrom=1, AnswerNumberTo=99999,
                       before=RID_SCRIPT.replace('__INVALID_LINK_TEXT__', js_str(invalid_link_text)))
 
+    def add_contact_choice(self, number, name, field, answers, title=None, invalid_link_text=INVALID_LINK_TEXT):
+        """Служебный «Единственный выбор» из поля базы контактов (код ответа = значение поля), например тип
+        интервью для квот: add_contact_choice(11, 'Type', 'type', {1: 'Личный опрос', 2: 'CAWI'}).
+        Нет контакта / неизвестное значение -> не пускаем; в тестировании без базы вопрос пропускается."""
+        script = (
+            'if (Q.isAnswered) return answered;\n'
+            f"let v = typeof contact !== 'undefined' && contact && contact.data ? Number(contact.data[{js_str(field)}]) : NaN;\n"
+            'if (v > 0 && v in Q) {\n'
+            '    Q[v].checked = true;\n'
+            '    return answered;\n'
+            '}\n'
+            'if (isTesting() || isValidation()) return skip;\n'
+            f'return exit({js_str(invalid_link_text)});')
+        title = title or f'<p>СЛУЖЕБНЫЙ: {name} (поле «{field}» из базы контактов)</p>'
+        return self.q(number, 'SingleChoice', title, name=name,
+                      AnswerList=self.alist(name, answers), before=script)
+
     def add_overquota_text(self, text=DEFAULT_OVERQUOTA_TEXT):
         """Скрипт «Обработка»: свой текст при срабатывании квоты (дописывается к self.postprocessing)."""
         js = ('if (interview.result == InterviewResult.Overquoting) {\n'
