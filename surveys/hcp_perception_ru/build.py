@@ -106,6 +106,22 @@ def cat_cond(c):
 # ----------------------------------------------------------------------------
 YES_NO = alist('Да/Нет', {1: 'Да', 2: 'Нет'})
 
+# Rid — простой номер респондента (1-5000) из базы контактов (поле «Rid»), чтобы быстро найти интервью.
+# Ссылки персональные: ?extid=<случайный ID> (tools/make_links.py). Без ID или без контакта в базе — не пускаем
+# (дублирует флаги проекта «Запрещать запуск анкеты…»). В тестировании без контакта вопрос пропускается.
+q(99, 'Numeric', 'СЛУЖЕБНЫЙ: Rid (номер респондента из базы контактов)', name='Rid',
+  AnswerNumberFrom=1, AnswerNumberTo=99999, before='''
+if (Q.isAnswered) return answered;
+let rid = typeof contact !== 'undefined' && contact && contact.data ? Number(contact.data['Rid']) : NaN;
+if (rid > 0) {
+    Q.openValueNum = rid;
+    return answered;
+}
+if (isTesting() || isValidation()) return skip;
+return exit('Ссылка на опрос недействительна. Пожалуйста, воспользуйтесь ссылкой из приглашения.');
+''')
+
+
 q(100, 'SingleChoice',
   '<p>Добрый день! Компания <b>IQVIA</b> специализируется на передовой аналитике в сфере здравоохранения.</p>'
   '<p>Мы проводим исследование рынка от имени фармацевтической компании с целью <b>оценки динамики рынка '
@@ -1016,6 +1032,14 @@ for (let c of [1, 2, 3]) {{
     questions[{n(33)} + c * 10 + 2].rows.setOrder(order);
     questions[{n(33)} + c * 10 + 3].rows.setOrder(order);
 }}
+'''
+
+# Квота закрыта (счётчики по городам S5 в проекте) — свой текст вместо стандартного
+qnr.postprocessing = '''
+if (interview.result == InterviewResult.Overquoting) {
+    return exit('К сожалению, мы уже набрали достаточное число участников. ' +
+                'Будем рады Вашему участию в других наших исследованиях!');
+}
 '''
 
 qnr.save(os.path.join(HERE, 'hcp_perception_ru.json'))
