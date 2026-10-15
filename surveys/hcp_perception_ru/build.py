@@ -493,11 +493,11 @@ for c in CATS:
     brand_list = alist(f'Q15 бренды кат.{c}', with_other(BRANDS[c], 'Другое. Пожалуйста, укажите'),
                        {96: OTHER_TXT | FIXED})
     q(n(15, c, 1), 'SingleChoice',
-      head + '<p>С <b>какого на какой бренд Вы перевели пациентов</b> чаще всего в рамках этой категории?</p>'
+      head + '<p>С <b>какого на какой бренд Вы переводили пациентов</b> чаще всего в рамках этой категории?</p>'
              '<p><b>Исходный бренд:</b></p>', name=f'Q15_{c}_FROM', Condition=switch_same,
       flags={'RandomizeAnswers': True}, AnswerList=brand_list)
     q(n(15, c, 2), 'SingleChoice',
-      head + '<p>С <b>какого на какой бренд Вы перевели пациентов</b> чаще всего в рамках этой категории?</p>'
+      head + '<p>С <b>какого на какой бренд Вы переводили пациентов</b> чаще всего в рамках этой категории?</p>'
              f'<p>Исходный бренд: {{Q15_{c}_FROM_TXT}}</p><p><b>Бренд, на который перешли:</b></p>',
       name=f'Q15_{c}_TO', Condition=switch_same, flags={'RandomizeAnswers': True}, AnswerList=brand_list,
       before=f'''
