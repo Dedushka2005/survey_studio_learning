@@ -28,6 +28,20 @@ JS_LIB = os.path.join(TOOLS_DIR, 'ss_lib.js')
 DEFAULT_SCREEN_TEXT = ('Благодарим вас за уделенное время! К сожалению, по условиям исследования '
                        'вы не можете принять в нем участие.')
 DEFAULT_REFUSE_TEXT = 'Благодарим вас за уделенное время! До свидания.'
+DEFAULT_OVERQUOTA_TEXT = ('К сожалению, мы уже набрали достаточное число участников. '
+                          'Будем рады Вашему участию в других наших исследованиях!')
+INVALID_LINK_TEXT = 'Ссылка на опрос недействительна. Пожалуйста, воспользуйтесь ссылкой из приглашения.'
+
+# Служебный Rid: номер респондента из поля «Rid» базы контактов (персональные ссылки, tools/make_links.py).
+# Нет контакта -> не пускаем; в тестировании без базы вопрос пропускается.
+RID_SCRIPT = '''if (Q.isAnswered) return answered;
+let rid = typeof contact !== 'undefined' && contact && contact.data ? Number(contact.data['Rid']) : NaN;
+if (rid > 0) {
+    Q.openValueNum = rid;
+    return answered;
+}
+if (isTesting() || isValidation()) return skip;
+return exit(__INVALID_LINK_TEXT__);'''
 
 # Часто используемые наборы флагов варианта ответа / строки
 OTHER_TXT = {'OpenValueTxt': True}                    # «Другое (укажите)»
@@ -156,6 +170,19 @@ class Questionnaire:
         self.questions.append(item)
         return item
 
+    # ------------------------------------------------- стандартные служебные элементы
+    def add_rid(self, number=10, invalid_link_text=INVALID_LINK_TEXT):
+        """Служебный вопрос Rid — вызывать ПЕРВЫМ, до остальных вопросов (номер меньше первого вопроса)."""
+        return self.q(number, 'Numeric', '<p>СЛУЖЕБНЫЙ: Rid (номер респондента из базы контактов)</p>',
+                      name='Rid', AnswerNumberFrom=1, AnswerNumberTo=99999,
+                      before=RID_SCRIPT.replace('__INVALID_LINK_TEXT__', js_str(invalid_link_text)))
+
+    def add_overquota_text(self, text=DEFAULT_OVERQUOTA_TEXT):
+        """Скрипт «Обработка»: свой текст при срабатывании квоты (дописывается к self.postprocessing)."""
+        js = ('if (interview.result == InterviewResult.Overquoting) {\n'
+              f'    return exit({js_str(text)});\n}}')
+        self.postprocessing = (self.postprocessing.rstrip() + '\n\n' + js).strip()
+
     # ------------------------------------------------------------------ сборка
     def to_dict(self):
         functions = common_functions(self.screen_text, self.refuse_text).strip()
@@ -217,6 +244,11 @@ class Questionnaire:
         assert not problems, '\n'.join(problems)
 
     def validate(self, data):
+        # соглашение: в каждой анкете служебный Rid и свой текст при квоте (add_rid / add_overquota_text)
+        if not any(x.get('OutputColumnTemplate') == 'Rid' for x in data['Questions']):
+            print('ВНИМАНИЕ: нет служебного вопроса Rid (qnr.add_rid())')
+        if 'Overquoting' not in data.get('ScriptPostProcessing', ''):
+            print('ВНИМАНИЕ: нет текста при срабатывании квоты (qnr.add_overquota_text())')
         numbers = [x['Number'] for x in data['Questions']]
         dup = {n for n in numbers if numbers.count(n) > 1}
         assert not dup, f'повторяются номера вопросов: {sorted(dup)}'

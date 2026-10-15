@@ -12,12 +12,18 @@ from ss_builder import Questionnaire, screen_if, refuse_if, OTHER_TXT, BLOCKING 
 qnr = Questionnaire('Новая анкета')
 q, alist = qnr.q, qnr.alist
 
+# --- Служебное (обязательно в каждой анкете, см. шпаргалку, раздел 8) -----------
+# Rid — номер респондента из базы контактов; первым вопросом, номер меньше остальных
+qnr.add_rid(number=1)
+# Свой текст при срабатывании квоты (скрипт «Обработка»)
+qnr.add_overquota_text()
+
 # --- Скринер -----------------------------------------------------------------
-q(1, 'SingleChoice', 'Согласны ли вы принять участие в опросе?', name='S0',
+q(2, 'SingleChoice', 'Согласны ли вы принять участие в опросе?', name='S0',
   AnswerList=alist('Да/Нет', {1: 'Да', 2: 'Нет'}),
   after=refuse_if([2]))
 
-q(2, 'Numeric', 'Сколько вам полных лет?', name='S1', AnswerNumberFrom=0, AnswerNumberTo=120,
+q(3, 'Numeric', 'Сколько вам полных лет?', name='S1', AnswerNumberFrom=0, AnswerNumberTo=120,
   after='if (Q.openValueInt < 18) return screenOut();')
 
 # --- Основная часть ----------------------------------------------------------
@@ -31,5 +37,7 @@ q(10, 'MultipleChoice', 'Какими брендами вы пользуетес
 qnr.global_functions = ''
 # Скрипт «Подготовка» (циклы, порядок вопросов)
 qnr.preprocessing = ''
+# Скрипт «Обработка»: свой код дописывать через +=, чтобы не затереть текст квоты
+# qnr.postprocessing += '...'
 
 qnr.save(os.path.join(HERE, 'survey.json'))
