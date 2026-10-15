@@ -17,8 +17,8 @@
   "Questions": [
     {
       "OrderIdx": 1,
-      "Number": 99,
-      "Text": "СЛУЖЕБНЫЙ: Rid (номер респондента из базы контактов)",
+      "Number": 10,
+      "Text": "<p>СЛУЖЕБНЫЙ: Rid (номер респондента из базы контактов)</p>",
       "QuestionType": "Numeric",
       "ExportedQuestionFlags": {},
       "ExportedSurveyFlags": {},
