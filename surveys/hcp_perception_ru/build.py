@@ -55,7 +55,7 @@ COMPANIES = {
     6: 'CHA Meditech', 7: 'CLS International', 8: 'Croma-Pharma', 9: 'Dr. Korman Laboratories',
     10: 'Fidia Farmaceutici', 11: 'Galderma', 12: 'IBSA', 13: 'Institute Hyalual',
     14: 'Laboratoires Fillmed', 15: 'Laboratoires Vivacy', 16: 'LG Chem', 17: 'Laboratoires Fijie',
-    18: 'Sinclair', 19: 'Teoxane Laboratories',
+    18: 'Sinclair', 19: 'Teoxane Laboratories', 20: 'Merz Aesthetics',
 }
 ALLERGAN = 1
 CHANNELS = {
@@ -105,6 +105,22 @@ def cat_cond(c):
 # Введение и скринер
 # ----------------------------------------------------------------------------
 YES_NO = alist('Да/Нет', {1: 'Да', 2: 'Нет'})
+
+# Rid (вопрос 10, как в системе) — простой номер респондента (1-5000) из базы контактов (поле «Rid»), чтобы быстро найти интервью.
+# Ссылки персональные: ?extid=<случайный ID> (tools/make_links.py). Без ID или без контакта в базе — не пускаем
+# (дублирует флаги проекта «Запрещать запуск анкеты…»). В тестировании без контакта вопрос пропускается.
+q(10, 'Numeric', '<p>СЛУЖЕБНЫЙ: Rid (номер респондента из базы контактов)</p>', name='Rid',
+  AnswerNumberFrom=1, AnswerNumberTo=99999, before='''
+if (Q.isAnswered) return answered;
+let rid = typeof contact !== 'undefined' && contact && contact.data ? Number(contact.data['Rid']) : NaN;
+if (rid > 0) {
+    Q.openValueNum = rid;
+    return answered;
+}
+if (isTesting() || isValidation()) return skip;
+return exit('Ссылка на опрос недействительна. Пожалуйста, воспользуйтесь ссылкой из приглашения.');
+''')
+
 
 q(100, 'SingleChoice',
   '<p>Добрый день! Компания <b>IQVIA</b> специализируется на передовой аналитике в сфере здравоохранения.</p>'
@@ -347,7 +363,8 @@ Q13_LIST = with_other({1: 'Более убедительные клиничес�
                        9: 'Рекомендация коллег/ лидеров мнений', 10: 'Положительный опыт коллег',
                        11: 'Более высокая прибыльность/ маржинальность для клиники'}, 'Другое (укажите)')
 
-alist('Важность', {1: '1. Совсем не важно', 2: '2', 3: '3', 4: '4', 5: '5. Чрезвычайно важно', 99: 'Не знаю'})
+alist('Важность', {1: '1. Совсем не важно', 2: '2. Скорее не важно', 3: '3. Отчасти важно, отчасти не важно',
+                   4: '4. Скорее важно', 5: '5. Чрезвычайно важно', 99: 'Не знаю'})
 alist('Q8 строки', with_other(Q8_ROWS, 'Другое. Пожалуйста, укажите'), {96: OTHER_ROW_NUM})
 alist('Q9 строки', Q9_ROWS)
 alist('Изменение использования', {1: 'Увеличится', 2: 'Останется примерно без изменений', 3: 'Уменьшится',
@@ -361,8 +378,7 @@ for c in CATS:
     # бренды категории; «Другое» показывает текст, вписанный в Q7 этой категории
     brand_named = with_other(BRANDS[c], f'{{Q7_{c}.96T}}')
     q(n(7, c), 'MultipleChoice',
-      ('<p><b>Раздел 2. Категории брендов и взаимодействие с ними</b></p>' if c == 1 else '') + head +
-      '<p>Какие из указанных ниже брендов Вы использовали наиболее часто за последние 3 месяца?</p>',
+      head + '<p>Какие из указанных ниже брендов Вы использовали наиболее часто за последние 3 месяца?</p>',
       name=f'Q7_{c}', comment=f'Выберите не более 5 брендов. {GK_NOTE}', Condition=cat_cond(c),
       flags={'RandomizeAnswers': True}, MaxAnswerCount=5, AnswerList=f'Бренды кат.{c}')
 
@@ -493,11 +509,11 @@ for c in CATS:
     brand_list = alist(f'Q15 бренды кат.{c}', with_other(BRANDS[c], 'Другое. Пожалуйста, укажите'),
                        {96: OTHER_TXT | FIXED})
     q(n(15, c, 1), 'SingleChoice',
-      head + '<p>С <b>какого на какой бренд Вы перевели пациента</b> в последний раз в рамках этой категории?</p>'
+      head + '<p>С <b>какого на какой бренд Вы переводили пациентов</b> чаще всего в рамках этой категории?</p>'
              '<p><b>Исходный бренд:</b></p>', name=f'Q15_{c}_FROM', Condition=switch_same,
       flags={'RandomizeAnswers': True}, AnswerList=brand_list)
     q(n(15, c, 2), 'SingleChoice',
-      head + '<p>С <b>какого на какой бренд Вы перевели пациента</b> в последний раз в рамках этой категории?</p>'
+      head + '<p>С <b>какого на какой бренд Вы переводили пациентов</b> чаще всего в рамках этой категории?</p>'
              f'<p>Исходный бренд: {{Q15_{c}_FROM_TXT}}</p><p><b>Бренд, на который перешли:</b></p>',
       name=f'Q15_{c}_TO', Condition=switch_same, flags={'RandomizeAnswers': True}, AnswerList=brand_list,
       before=f'''
@@ -620,10 +636,11 @@ q(n(24), 'MultipleChoice',
 q(n(25), 'MultipleChoice',
   'Какие <b>каналы Вы предпочитаете</b> использовать <b>для взаимодействия с компаниями, предоставляющими '
   'информацию или поддержку в отношении инъекционных филлеров</b>?', name='Q25',
-  comment='Выберите 3 канала', flags={'RandomizeAnswers': True}, MinAnswerCount=3, MaxAnswerCount=3,
+  comment='Выберите не менее 3х каналов', flags={'RandomizeAnswers': True}, MinAnswerCount=3,
   AnswerList='Каналы')
 q(n(25, 0, 1), 'Ranking',
-  'Пожалуйста, расставьте выбранные каналы по предпочтительности: 1 – первое место, 2 – второе, 3 – третье.',
+  'Пожалуйста, расставьте выбранные каналы по предпочтительности: 1 – первое место, 2 – второе, 3 – третье, '
+  'и так далее.',
   name='Q25_RANK', AnswerList=alist('Каналы (ранжирование)', with_other(CHANNELS, '{Q25.96T}')),
   before='Q.showOnly(Q25.getCheckedCodes());')
 q(n(26), 'Table_Numeric',
@@ -646,10 +663,11 @@ Q27_LIST = with_other({1: 'Новые клинические свидетель�
                        14: 'Информация о наличии и заказе продукции'}, 'Другое. Пожалуйста, укажите')
 q(n(27), 'MultipleChoice',
   'Какие виды материалов или поддержки со стороны производителей филлеров <b>были бы для Вас наиболее ценными</b>?',
-  name='Q27', comment='Выберите 3 наиболее предпочтительных варианта', flags={'RandomizeAnswers': True},
-  MinAnswerCount=3, MaxAnswerCount=3, AnswerList=alist('Q27', Q27_LIST, {96: OTHER}))
+  name='Q27', comment='Выберите от 3х до 5ти наиболее предпочтительных варианта',
+  flags={'RandomizeAnswers': True}, MinAnswerCount=3, MaxAnswerCount=5, AnswerList=alist('Q27', Q27_LIST, {96: OTHER}))
 q(n(27, 0, 1), 'Ranking',
-  'Пожалуйста, расставьте выбранные варианты по предпочтительности: 1 – первое место, 2 – второе, 3 – третье.',
+  'Пожалуйста, расставьте выбранные варианты по предпочтительности: 1 – первое место, 2 – второе, 3 – третье, '
+  'и так далее.',
   name='Q27_RANK', AnswerList=alist('Q27 (ранжирование)', with_other(Q27_LIST, '{Q27.96T}')),
   before='Q.showOnly(Q27.getCheckedCodes());')
 
@@ -798,10 +816,10 @@ return Q.rows.hasVisible ? ok : skip;
 PRICE_ROWS = {c * 10 + k: f'{CATS[c]} — {label}' for c in CATS
               for k, label in ((1, 'минимальная'), (2, 'средняя'), (3, 'максимальная'))}
 alist('Цены мин/сред/макс', PRICE_ROWS)
-for qn, codes, title, unit in ((35, '1, 3', 'за типичный сеанс лечения', 'руб.'),
-                               (36, '2, 3', 'за мл препарата', 'руб./мл')):
+for qn, codes, title, unit in ((35, '1, 3', '<b>пациента</b> за <b>типичный сеанс лечения</b>', 'руб.'),
+                               (36, '2, 3', 'пациента <b>за мл препарата</b>', 'руб./мл')):
     q(n(qn), 'Table_Numeric',
-      f'Какая цена обычно взимается с пациента {title} в каждой из указанных ниже категорий процедур '
+      f'Какая цена обычно взимается с {title} в каждой из указанных ниже категорий процедур '
       f'({unit})?', name=f'Q{qn}',
       comment=('Просим Вас учесть общую сумму, уплачиваемую пациентом за типичный сеанс лечения, включающую '
                'как стоимость препарата, так и стоимость процедуры. ' if qn == 35 else '') +
@@ -967,7 +985,7 @@ function companyName(code) {{
     return names[code] || '';
 }}
 
-// Q35/Q36: в каждой категории минимальная <= средняя <= максимальная (0 = «не знаю», не проверяется)
+// Q35/Q36: в каждой категории минимальная < средняя < максимальная (0 = «не знаю», не проверяется)
 function requireMinAvgMax(q) {{
     for (let cat of [1, 2, 3]) {{
         let values = [1, 2, 3].map(function (k) {{
@@ -975,8 +993,8 @@ function requireMinAvgMax(q) {{
             return row.visible ? row.answer.openValueNum : undefined;
         }}).filter(function (v) {{ return v !== undefined && v > 0; }});
         for (let i = 1; i < values.length; i++) {{
-            if (values[i] < values[i - 1]) {{
-                return error('Проверьте цены: минимальная не должна быть больше средней, а средняя — больше максимальной.');
+            if (values[i] <= values[i - 1]) {{
+                return error('Проверьте цены: минимальная должна быть меньше средней, а средняя — меньше максимальной.');
             }}
         }}
     }}
@@ -1014,6 +1032,14 @@ for (let c of [1, 2, 3]) {{
     questions[{n(33)} + c * 10 + 2].rows.setOrder(order);
     questions[{n(33)} + c * 10 + 3].rows.setOrder(order);
 }}
+'''
+
+# Квота закрыта (счётчики по городам S5 в проекте) — свой текст вместо стандартного
+qnr.postprocessing = '''
+if (interview.result == InterviewResult.Overquoting) {
+    return exit('К сожалению, мы уже набрали достаточное число участников. ' +
+                'Будем рады Вашему участию в других наших исследованиях!');
+}
 '''
 
 qnr.save(os.path.join(HERE, 'hcp_perception_ru.json'))
