@@ -36,7 +36,7 @@
       "ExportedSurveyFlags": {},
       "OutputColumnTemplate": "Type",
       "ScriptBeforeShow": "if (Q.isAnswered) return answered;\nlet v = typeof contact !== 'undefined' && contact && contact.data ? Number(contact.data[\"type\"]) : NaN;\nif (v > 0 && v in Q) {\n    Q[v].checked = true;\n    return answered;\n}\nif (isTesting() || isValidation()) return skip;\nreturn exit(\"Ссылка на опрос недействительна. Пожалуйста, воспользуйтесь ссылкой из приглашения.\");",
-      "AnswerList": "Type"
+      "AnswerList": "QType список"
     },
     {
       "OrderIdx": 3,
@@ -191,7 +191,7 @@
       "ExportedSurveyFlags": {},
       "OutputColumnTemplate": "Q1a",
       "Comment": "Общее число пациентов, интересующихся процедурой каждый месяц. Если таких нет — укажите 0. Примечание: ГК означает гиалуроновая кислота.",
-      "ScriptAfterAnswer": "// Категории 1-3 совпадают с S3: если врач проводит процедуры (S3 > 0), пациентов не может быть 0\nresetRowMarks(Q);\nfor (let code of [1, 2, 3]) {\n    if (numRow(S3, code) > 0 && numRow(Q, code) === 0) {\n        return rowError(Q, code, 'Ранее Вы указали, что проводите процедуры в категории «'\n            + Q.rows[code].plainText + '». Пожалуйста, укажите число пациентов больше 0.');\n    }\n}\nreturn ok;",
+      "ScriptAfterAnswer": "resetRowMarks(Q);\nfor (let code of [1, 2, 3]) {\n    if (numRow(S3, code) > 0 && numRow(Q, code) === 0) {\n        return rowError(Q, code, 'Ранее Вы указали, что проводите процедуры в категории «'\n            + Q.rows[code].plainText + '». Пожалуйста, укажите число пациентов больше 0.');\n    }\n}\nreturn ok;",
       "RowList": "Процедуры 6",
       "AnswerNumberFrom": 0,
       "AnswerNumberTo": 99999
@@ -1186,7 +1186,7 @@
       ]
     },
     {
-      "Name": "Type",
+      "Name": "QType список",
       "Type": "Common",
       "AnswerItems": [
         {
