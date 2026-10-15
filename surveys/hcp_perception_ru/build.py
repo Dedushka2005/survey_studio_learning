@@ -967,7 +967,7 @@ function companyName(code) {{
     return names[code] || '';
 }}
 
-// Q35/Q36: в каждой категории минимальная <= средняя <= максимальная (0 = «не знаю», не проверяется)
+// Q35/Q36: в каждой категории минимальная < средняя < максимальная (0 = «не знаю», не проверяется)
 function requireMinAvgMax(q) {{
     for (let cat of [1, 2, 3]) {{
         let values = [1, 2, 3].map(function (k) {{
@@ -975,8 +975,8 @@ function requireMinAvgMax(q) {{
             return row.visible ? row.answer.openValueNum : undefined;
         }}).filter(function (v) {{ return v !== undefined && v > 0; }});
         for (let i = 1; i < values.length; i++) {{
-            if (values[i] < values[i - 1]) {{
-                return error('Проверьте цены: минимальная не должна быть больше средней, а средняя — больше максимальной.');
+            if (values[i] <= values[i - 1]) {{
+                return error('Проверьте цены: минимальная должна быть меньше средней, а средняя — меньше максимальной.');
             }}
         }}
     }}
