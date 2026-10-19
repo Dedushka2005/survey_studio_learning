@@ -693,4 +693,5 @@ for (let qn of [{n(13)}, {n(21)}, {n(29)}]) {{
 }}
 '''
 
-qnr.save(os.path.join(HERE, 'aesthetics_ru_v2.json'))
+if __name__ == '__main__':  # при импорте (check_data.py берёт справочники) файл не пересобираем
+    qnr.save(os.path.join(HERE, 'aesthetics_ru_v2.json'))
