@@ -1042,4 +1042,5 @@ if (interview.result == InterviewResult.Overquoting) {
 }
 '''
 
-qnr.save(os.path.join(HERE, 'hcp_perception_ru.json'))
+if __name__ == '__main__':  # при импорте (check_data.py берёт справочники) файл не пересобираем
+    qnr.save(os.path.join(HERE, 'hcp_perception_ru.json'))
