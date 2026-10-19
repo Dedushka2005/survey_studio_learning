@@ -2,6 +2,8 @@
 
 Resp — одно интервью: доступ к переменным выгрузки (одиночные, слоты множественного ответа `base_<n>`,
 таблицы `base_xr<строка>`) и типовые проверки, копящие ERR (логика) и WARN (качество).
+load_links() — база ссылок (xlsx от make_links.py), run() — прогон check(R, links) по всем интервью .sav с отчётом.
+Нужен pyreadstat (pip install pyreadstat).
 """
 import re
 
@@ -137,3 +139,38 @@ def is_flat(t):
     """Прямолинейные ответы: одно значение во всех строках таблицы (≥ 4 строк)."""
     vals = [v for v in t.values() if not isinstance(v, str)]
     return len(vals) >= 4 and len(set(vals)) == 1
+
+
+def load_links(path, *fields):
+    """База ссылок make_links.py: {extid: Rid} или, с полями (напр. 'type'), {extid: (Rid, type, …)}."""
+    import openpyxl
+    rows = openpyxl.load_workbook(path, read_only=True).active.iter_rows(values_only=True)
+    head = next(rows)
+    ext = head.index('ID')
+    idx = [head.index(f) for f in ('Rid',) + fields]
+    vals = (lambda r: float(r[idx[0]])) if not fields else (lambda r: tuple(float(r[i]) for i in idx))
+    return {r[ext]: vals(r) for r in rows}
+
+
+def run(path, check, links, min_dur, loi='~40'):
+    """Проверить все интервью выгрузки .sav: check(R, links) + длительность; печать ERR/WARN по Rid."""
+    import pyreadstat
+    df, _ = pyreadstat.read_sav(path)
+    cols = list(df.columns)
+    total = 0
+    for row in df.to_dict('records'):
+        R = Resp(row, cols)
+        check(R, links)
+        total += len(R.errs)
+        dur = num(row.get('IVDur')) or 0   # IVDur в выгрузке — в минутах
+        if dur < min_dur:
+            R.warn(f'длительность {dur:g} мин (< {min_dur}, заявлено {loi})')
+        print(f'\n=== Rid {row["Rid"]:g}  ({row["IVDate1"]}, {dur:g} мин) ===')
+        for e in R.errs:
+            print('  ERR ', e)
+        for w in R.warns:
+            print('  WARN', w)
+        if not R.errs and not R.warns:
+            print('  ок')
+    print(f'\nИнтервью: {len(df)}, нарушений логики: {total}')
+    return total

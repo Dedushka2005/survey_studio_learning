@@ -40,4 +40,5 @@ qnr.preprocessing = ''
 # Скрипт «Обработка»: свой код дописывать через +=, чтобы не затереть текст квоты
 # qnr.postprocessing += '...'
 
-qnr.save(os.path.join(HERE, 'survey.json'))
+if __name__ == '__main__':  # при импорте (check_data.py берёт справочники) файл не пересобираем
+    qnr.save(os.path.join(HERE, 'survey.json'))

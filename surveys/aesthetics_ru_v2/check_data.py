@@ -11,13 +11,10 @@
 import os
 import sys
 
-import openpyxl
-import pyreadstat
-
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(HERE, '..', '..', 'tools'))
 sys.path.insert(0, HERE)
-from ss_check import Resp, empty, is_flat, num, txt  # noqa: E402
+from ss_check import empty, is_flat, load_links, num, run, txt  # noqa: E402
 from build import (AREAS, BRANDS, CITIES, JUVEDERM, JUVEDERM_ANY_SCORE, NPS_EXTRA_BRANDS,  # noqa: E402
                    SCENARIOS, SCENARIOS_BIO, SEC3)
 
@@ -154,28 +151,5 @@ def check(R, links):
         R.err('AE: есть ответы, а блок скрыт')
 
 
-def main(path):
-    df, _ = pyreadstat.read_sav(path)
-    ws = openpyxl.load_workbook(LINKS, read_only=True).active
-    links = {row[2]: (float(row[0]), float(row[1])) for row in ws.iter_rows(min_row=2, values_only=True)}
-    cols = list(df.columns)
-    total = 0
-    for row in df.to_dict('records'):
-        R = Resp(row, cols)
-        check(R, links)
-        total += len(R.errs)
-        dur = num(row.get('IVDur')) or 0
-        if dur < MIN_DUR:
-            R.warn(f'длительность {dur:g} мин (< {MIN_DUR}, заявлено 30–40)')
-        print(f'\n=== Rid {row["Rid"]:g}  ({row["IVDate1"]}, {dur:g} мин) ===')
-        for e in R.errs:
-            print('  ERR ', e)
-        for w in R.warns:
-            print('  WARN', w)
-        if not R.errs and not R.warns:
-            print('  ок')
-    print(f'\nИнтервью: {len(df)}, нарушений логики: {total}')
-
-
 if __name__ == '__main__':
-    main(sys.argv[1])
+    run(sys.argv[1], check, load_links(LINKS, 'type'), MIN_DUR, '30–40')
