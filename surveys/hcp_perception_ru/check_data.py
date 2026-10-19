@@ -23,6 +23,7 @@ JUVEDERM = 2
 ALLERGAN = 1
 COMPANIES = list(range(1, 21)) + [96]
 CHANNELS = list(range(1, 13)) + [96]
+MIN_DUR = 15  # мин (IVDur в выгрузке — в минутах); быстрее — подозрение на «пролистывание», LOI ~40
 
 
 def empty(v):
@@ -195,6 +196,7 @@ def check(resp, links):
                           asked=a, allowed={1, 2, 3, 4, 5, 99})
         if a:
             R.check_other(f'Q8_{c}', 96 in t8, f'Q8_{c}xr96_T')
+            same_answer(R, f'Q8_{c}', t8)
         # Q9
         t9 = R.check_rows(f'Q9_{c}', range(1, 19), asked=a)
         if a:
@@ -204,6 +206,8 @@ def check(resp, links):
                 R.err(f'Q9_{c}: бренды вне Q7 (+Ювидерм): {wrong}')
             if not assessed and any(int(v) != 99 for v in t9.values()):
                 R.err(f'Q9_{c}: брендов нет, должно быть «Ни один» во всех строках')
+            if len(assessed) > 1:
+                same_answer(R, f'Q9_{c}', t9, 'один бренд во всех')
         # Q10
         t10 = R.check_rows(f'Q10_{c}', assessed if a else [], asked=a and bool(assessed),
                            allowed={1, 2, 3, 4, 99})
@@ -243,6 +247,8 @@ def check(resp, links):
     for k, val in t19.items():
         if len(txt(val)) < 3:
             R.err(f'Q19: строка {k} короче 3 символов ({val!r})')
+    if len(t19) == 3 and len({txt(v).lower() for v in t19.values()}) == 1:
+        R.warn(f'Q19: одинаковый ответ по всем категориям ({txt(t19[1])!r})')
 
     # --- раздел 4 ---
     if empty(R.v('Q20xr1')):
@@ -253,12 +259,18 @@ def check(resp, links):
     for k, val in t22.items():
         if (k != ALLERGAN or ALLERGAN in q21) and val < 1:
             R.err(f'Q22: компания {k} отмечена в Q21, а взаимодействий {val:g}')
+        if k == ALLERGAN and ALLERGAN not in q21 and val > 0:
+            R.warn(f'Q22: Allergan {val:g} взаимодействий, хотя в Q21 не отмечен')
         if val > 12:
             R.warn(f'Q22: компания {k} — {val:g} взаимодействий (>12, мягкое предупреждение)')
     loop23 = [k for k, val in t22.items() if val >= 1]
+    flat = []
     for k in COMPANIES:
-        R.check_rows(f'Q23_{k}.{k}', range(1, 12), asked=k in loop23, allowed={1, 2, 3, 4, 5, 99})
+        t23 = R.check_rows(f'Q23_{k}.{k}', range(1, 12), asked=k in loop23, allowed={1, 2, 3, 4, 5, 99})
+        if is_flat(t23):
+            flat.append(k)
         R.check_multi(f'Q24_{k}.{k}', asked=k in loop23, other_txt=f'Q24_{k}.{k}_96T')
+    loop_flat(R, 'Q23', flat, loop23)
     q25 = R.check_multi('Q25', mn=3)
     rank_check(R, 'Q25_RANK', q25, CHANNELS)
     t26 = R.check_rows('Q26', q25, lo=1, hi=99)
@@ -269,8 +281,12 @@ def check(resp, links):
     rank_check(R, 'Q27_RANK', q27, list(range(1, 15)) + [96])
     R.check_multi('Q28', mx=3)
     loop29 = sorted(set([ALLERGAN] + [k for k in q21 if k != 97]))
+    flat = []
     for k in COMPANIES:
-        R.check_rows(f'Q29_{k}.{k}', range(1, 9), asked=k in loop29, allowed={1, 2, 3, 4, 5})
+        t29 = R.check_rows(f'Q29_{k}.{k}', range(1, 9), asked=k in loop29, allowed={1, 2, 3, 4, 5})
+        if is_flat(t29):
+            flat.append(k)
+    loop_flat(R, 'Q29', flat, loop29)
     R.check_multi('Q30', mx=3, none_code=97)
 
     # --- раздел 5 ---
@@ -279,7 +295,10 @@ def check(resp, links):
     for c in CATS:
         used = [b for b in R.multi(f'Q7_{c}') if b != 97]
         a = c in active and bool(used)
-        R.check_rows(f'Q33_PACK_{c}', used, asked=a)
+        pack = R.check_rows(f'Q33_PACK_{c}', used, asked=a)
+        nums = {k: txt(v) for k, v in pack.items() if re.fullmatch(r'\d+', txt(v)) and int(txt(v)) > 1}
+        if nums:
+            R.warn(f'Q33_PACK_{c}: в «формате упаковки» только числа {nums} (цена или количество?)')
         for part in ('LIST', 'NET'):
             t = R.check_rows(f'Q33_{part}_{c}', used, asked=a, lo=0)
             zeros = [k for k, val in t.items() if val == 0]
@@ -312,10 +331,27 @@ def check(resp, links):
         t = txt(R.v(name))
         if not t:
             R.err(f'{name}: нет ответа')
-        elif len(t) < 5:
+        elif name == 'Q43' and len(t) < 5:
             R.warn(f'{name}: короткий ответ {t!r}')
     if R.has('AE'):
         R.err('AE: есть ответы, а блок скрыт')
+
+
+def is_flat(t):
+    """Прямолинейные ответы: одно значение во всех строках таблицы (≥ 4 строк)."""
+    vals = [v for v in t.values() if not isinstance(v, str)]
+    return len(vals) >= 4 and len(set(vals)) == 1
+
+
+def same_answer(R, base, t, what='одинаковый ответ во всех'):
+    if is_flat(t):
+        R.warn(f'{base}: {what} {len(t)} строках ({next(iter(t.values())):g})')
+
+
+def loop_flat(R, base, flat, loop):
+    """Цикл по компаниям: одна оценка во всех строках — по одной компании бывает, у всех — замечание."""
+    if len(loop) >= 2 and len(flat) == len(loop):
+        R.warn(f'{base}: по всем {len(loop)} компаниям одна оценка во всех строках')
 
 
 def rank_check(R, base, chosen, codes):
@@ -337,7 +373,9 @@ def main(path):
         check(R, links)
         total += len(R.errs)
         dur = num(row.get('IVDur')) or 0
-        print(f'\n=== Rid {row["Rid"]:g}  ({row["IVDate1"]}, {dur / 60:.0f} мин) ===')
+        if dur < MIN_DUR:
+            R.warn(f'длительность {dur:g} мин (< {MIN_DUR}, заявлено ~40)')
+        print(f'\n=== Rid {row["Rid"]:g}  ({row["IVDate1"]}, {dur:g} мин) ===')
         for e in R.errs:
             print('  ERR ', e)
         for w in R.warns:

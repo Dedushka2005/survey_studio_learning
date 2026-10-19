@@ -578,7 +578,7 @@ AnswerNumberFrom, AnswerNumberTo, ScriptBeforeShow, ScriptAfterAnswer, BeforeSho
   таблицы — `Q8_1xr<код строки>` (значение = код колонки / число / текст), текст строки «Другое» — `Q8_1xr96_T`
   (в числовой таблице — `Q37xr96T`); ранжирование — `Q25_RANK_<код>` = место; **итерации цикла** —
   `Q11_1_<код>.<код>_<слот>`, `Q23_<код>.<код>xr<строка>`; служебные с `SkipExport` не выгружаются; в начале —
-  `ID`, `RespExtID` (= extid ссылки), `IVDate1/2`, `IVDur` (сек.), `Phone` (из базы), `IPAddress`, `UserAgent`.
+  `ID`, `RespExtID` (= extid ссылки), `IVDate1/2`, `IVDur` (**мин.**, метка «Длительность интервью (мин.)»), `Phone` (из базы), `IPAddress`, `UserAgent`.
   Чтение — `pyreadstat` (`pip install pyreadstat`). Колонки с результатом интервью (Completed/Screened) в выгрузке
   не было; все 9 интервью — полные (дошли до Q43). ⚠️ Как выглядят скринауты/брошенные — не видели.
 - `compare_export.py`: порядок аргументов — сначала JSON из репозитория, потом выгрузка (иначе REPO/SYS перепутаны).
