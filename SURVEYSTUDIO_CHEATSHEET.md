@@ -347,7 +347,7 @@ AnswerNumberFrom, AnswerNumberTo, ScriptBeforeShow, ScriptAfterAnswer, BeforeSho
     `check_single/multi/rows`, `check_other` (код «Другое» ↔ текст), `check_other_row(base)` (числовая строка
     «Другое» в таблице, как `requireRowText`), `err/warn`; `empty/num/txt`, `is_flat(t)`;
     `load_links(xlsx, 'type')` — база ссылок `{extid: Rid}` / `{extid: (Rid, type)}`; `run(sav, check, links,
-    min_dur, loi)` — прогон по всем интервью с отчётом по Rid (ERR/WARN, длительность). Используют HCP и v2.
+    min_dur, loi)` — прогон по всем интервью с отчётом по Rid (ERR/WARN, длительность по `IVDurAll`, число сессий `IVCnt`). Используют HCP и v2.
     **Новая анкета:** `surveys/_template/check_data.py` — заготовка (`check(R, links)` + `run`).
   - `tools/loi_estimate.py` — **оценка длительности анкеты (LOI)** по JSON: чтение текста + действия
     (клик 2,5 с, строка шкалы 4 с, выпадающий список 5 с, число 5–9 с, короткий текст 15 с, развёрнутый 35 с,
@@ -670,7 +670,9 @@ AnswerNumberFrom, AnswerNumberTo, ScriptBeforeShow, ScriptAfterAnswer, BeforeSho
   таблицы — `Q8_1xr<код строки>` (значение = код колонки / число / текст), текст строки «Другое» — `Q8_1xr96_T`
   (в числовой таблице — `Q37xr96T`); ранжирование — `Q25_RANK_<код>` = место; **итерации цикла** —
   `Q11_1_<код>.<код>_<слот>`, `Q23_<код>.<код>xr<строка>`; служебные с `SkipExport` не выгружаются; в начале —
-  `ID`, `RespExtID` (= extid ссылки), `IVDate1/2`, `IVDur` (**мин.**, метка «Длительность интервью (мин.)»), `Phone` (из базы), `IPAddress`, `UserAgent`.
+  `ID`, `RespExtID` (= extid ссылки), `IVDate1/2`, `IVDur` (**мин.**, метка «Длительность интервью (мин.)» — ✅ это **только последняя сессия**), `IVDurAll` (мин., сумма
+  всех сессий — полная длительность; использовать её), `IVCnt` (число сессий интервью: >1 — бросал и продолжал; 22.10.2026),
+  `IVProcessingStatus`, `Phone` (из базы), `IPAddress`, `UserAgent`.
   Чтение — `pyreadstat` (`pip install pyreadstat`). Колонки с результатом интервью (Completed/Screened) в выгрузке
   не было; все 9 интервью — полные (дошли до Q43). ⚠️ Как выглядят скринауты/брошенные — не видели.
 - `compare_export.py`: порядок аргументов — сначала JSON из репозитория, потом выгрузка (иначе REPO/SYS перепутаны).
