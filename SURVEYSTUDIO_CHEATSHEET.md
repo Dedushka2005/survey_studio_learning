@@ -335,7 +335,9 @@ AnswerNumberFrom, AnswerNumberTo, ScriptBeforeShow, ScriptAfterAnswer, BeforeSho
     `autoAnswerIfSingle(q)`, `autoFillIfSingle(q, total)`, `requireSum(q, target)`, `rowError(q, code, msg)`,
     `resetRowMarks(q)`, **`otherChoiceRow(q, code)`** / `requireChoiceRowText(q, code)` (строка «Другое» в таблице
     с одним / несколькими ответами, см. раздел 8),
-    `softWarning(q, condition, msg)` (нестрогая проверка: предупредить один раз, повторное «Далее» пропускает).
+    `softWarning(q, condition, msg)` (нестрогая проверка: предупредить один раз, повторное «Далее» пропускает),
+    многоязычные анкеты: `editText(obj, f)`, `setTexts(obj, {ru, en})`, `rewrapText(obj, wrap)`, `stripTags(s)`,
+    `tr({ru, en})` (см. раздел 8, «Многоязычные анкеты»).
   - `save()` также проверяет, что вопросы из скриптов (`Q<номер>`, имена шаблонов) и условий существуют.
     Тексты скринаута/отказа задаются в `Questionnaire(screen_text=…, refuse_text=…)`.
   - Функции конкретной анкеты — в `qnr.global_functions`, они добавляются после общих.
@@ -521,6 +523,21 @@ AnswerNumberFrom, AnswerNumberTo, ScriptBeforeShow, ScriptAfterAnswer, BeforeSho
   предупреждения, «не знаю» = 0, подозрительные значения. Скрипт проверить подсовыванием испорченных значений.
   Плюс качество: длительность против заявленной, одинаковые ответы во всех строках таблиц, тексты-отписки.
   Данные респондентов в репозиторий не кладём (файлы — в scratchpad).
+- **Многоязычные анкеты** (с 30.10.2026, после ошибки «Unable to edit text in a multilingual survey»):
+  - В скриптах **не присваивать `.text`** (вопрос, ответ, строка, колонка) — ни подсветку, ни подстановку.
+    Только через функции `ss_lib.js`, а в «Функциях» анкеты объявить языки: `const LANGS = [Language.ru, Language.en];`
+    (без `LANGS` те же функции работают как в обычной анкете через `.text`):
+    `setTexts(Q[99], {ru: 'Ни один из перечисленных', en: 'None of the above'})` — задать текст по языкам;
+    `editText(obj, t => …)` — изменить текст каждого языка; `rowError`/`resetRowMarks` уже переведены на
+    `rewrapText` и подсвечивают строку на всех языках.
+  - Читать `.text`/`.plainText` можно (текст на языке респондента, ⚠️ не проверено).
+  - Всё, что видит респондент из скрипта, — на его языке: `error(tr({ru: 'Ранее Вы сказали…', en: 'Earlier you said…'}))`,
+    переменные подстановки `V['x'] = tr({ru: 'прекратить выписку', en: 'stop prescribing'})`, тексты
+    скринаута/завершения (`exitWithResult(…, tr({…}))`).
+  - `save()` в многоязычной анкете (`SupportedLanguages` ≥ 2) не пропустит `.text =` в скриптах вопросов и анкету
+    без `LANGS` в «Функциях». ⚠️ `ss_builder` сам пока не генерирует переводы (`QuestionLocalizations`) —
+    при первой многоязычной анкете в репозитории добавить поддержку.
+  - При ручной правке анкеты в системе — то же правило; при проверке чужой анкеты искать `\.text\s*=` в скриптах.
 
 ## 9. Проверено на практике
 
@@ -681,3 +698,4 @@ AnswerNumberFrom, AnswerNumberTo, ScriptBeforeShow, ScriptAfterAnswer, BeforeSho
   (`kb/help_scripts_2005.md`, то же у вопроса/ответа/колонки). Язык респондента — `getCurrentLanguage()`
   (возвращает `'ru'`, `'en'`…, `kb/help_scripts_2001.md`) — для текстов `error()` и переменных подстановки.
   ⚠️ Запись в `textLocalizations` и сравнение `getCurrentLanguage() === 'en'` ещё не проверены в системе.
+  Правило и функции — раздел 8, «Многоязычные анкеты».
