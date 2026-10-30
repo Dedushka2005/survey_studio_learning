@@ -53,7 +53,8 @@ BRANDS = {
         32: 'Renaissance / Ренессанс', 33: 'Novacutan YBio / Новакутан Ю Био'},
 }
 JUVEDERM = 2
-# Q11-Q12: Ювидерм (кат.1) + до 2 случайных брендов с оценкой 0-6 в Q10.
+JUVEDERM_CATS = (1, 2)   # 30.10.2026: Ювидерм есть и в кат.2 (ТЗ V3) — задаём так же, как в кат.1
+# Q11-Q12: Ювидерм (кат.1 и 2) + до 2 случайных брендов с оценкой 0-6 в Q10.
 # True — Ювидерм задаётся при любой оценке в Q10; False — только при оценке 0-6 (как в ТЗ).
 JUVEDERM_ANY_SCORE = False
 NPS_EXTRA_BRANDS = 2
@@ -420,7 +421,7 @@ showRowsWhere(Q, function (code) {{ return Q9_{c}.isChecked(code); }});
 return Q.rows.hasVisible ? ok : skip;
 ''')
 
-    # Q11-Q12 — цикл по брендам: Ювидерм (кат.1) + до 2 случайных брендов с оценкой 0-6 в Q10
+    # Q11-Q12 — цикл по брендам: Ювидерм (кат.1 и 2) + до 2 случайных брендов с оценкой 0-6 в Q10
     q(9110 + c, 'MultipleChoice', f'СЛУЖЕБНЫЙ: бренды кат.{c} для Q11-Q12', name=f'SVC11_{c}',
       Condition=cat_cond(c), AnswerList=alist(f'Q11 цикл кат.{c}', brand_named), flags={'SkipExport': True},
       before=f'return pickLowScoreBrands(Q, Q10_{c}, {c});')
@@ -633,14 +634,14 @@ function isLowScore(score) {{
     return score !== undefined && score >= 0 && score <= 6;
 }}
 
-// Q11-Q12: Ювидерм (кат.1, при оценке 0-6{' или любой' if JUVEDERM_ANY_SCORE else ''}) + до {NPS_EXTRA_BRANDS} случайных
+// Q11-Q12: Ювидерм (кат.{', '.join(map(str, JUVEDERM_CATS))}, при оценке 0-6{' или любой' if JUVEDERM_ANY_SCORE else ''}) + до {NPS_EXTRA_BRANDS} случайных
 // брендов с оценкой 0-6. Ранее выбранные бренды сохраняются (при возврате назад выбор не меняется).
 function pickLowScoreBrands(Q, q10, cat) {{
     let low = [];
     let juvederm = false;
     for (let row of q10.rows.getVisible()) {{
         let score = row.getCheckedCode(true);
-        if (cat === 1 && row.code === {JUVEDERM}) {{
+        if (({' || '.join(f'cat === {c}' for c in JUVEDERM_CATS)}) && row.code === {JUVEDERM}) {{
             juvederm = {'score !== undefined' if JUVEDERM_ANY_SCORE else 'isLowScore(score)'};
         }} else if (isLowScore(score)) {{
             low.push(row.code);

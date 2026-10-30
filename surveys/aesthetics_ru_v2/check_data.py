@@ -15,7 +15,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(HERE, '..', '..', 'tools'))
 sys.path.insert(0, HERE)
 from ss_check import empty, is_flat, load_links, num, run, txt  # noqa: E402
-from build import (AREAS, BRANDS, CITIES, JUVEDERM, JUVEDERM_ANY_SCORE, NPS_EXTRA_BRANDS,  # noqa: E402
+from build import (AREAS, BRANDS, CITIES, JUVEDERM, JUVEDERM_ANY_SCORE, JUVEDERM_CATS, NPS_EXTRA_BRANDS,  # noqa: E402
                    SCENARIOS, SCENARIOS_BIO, SEC3)
 
 LINKS = os.path.join(HERE, 'links', 'aesthetics_ru_v2_links_7000.xlsx')
@@ -88,14 +88,14 @@ def check(R, links):
         t10 = R.check_rows(f'Q10_{c}', brands, asked=a and bool(brands), allowed=set(range(11)) | {99})
         if is_flat(t10):
             R.warn(f'Q10_{c}: одна оценка у всех {len(t10)} брендов ({next(iter(t10.values())):g})')
-        # цикл Q11–Q12: Ювидерм (кат.1, оценка 0–6) + до NPS_EXTRA_BRANDS случайных брендов с оценкой 0–6
+        # цикл Q11–Q12: Ювидерм (кат.1 и 2, оценка 0–6) + до NPS_EXTRA_BRANDS случайных брендов с оценкой 0–6
         scores = {b: int(v) for b, v in t10.items()}
-        juv = c == 1 and JUVEDERM in scores and (JUVEDERM_ANY_SCORE or low(scores[JUVEDERM]))
-        others = [b for b, s in scores.items() if low(s) and not (c == 1 and b == JUVEDERM)]
+        juv = c in JUVEDERM_CATS and JUVEDERM in scores and (JUVEDERM_ANY_SCORE or low(scores[JUVEDERM]))
+        others = [b for b, s in scores.items() if low(s) and not (c in JUVEDERM_CATS and b == JUVEDERM)]
         looped = [b for b in list(BRANDS[c]) + [96]
                   if R.has(f'Q11_{c}_{b}.{b}') or R.multi(f'Q12_{c}_{b}.{b}')]
-        extra = [b for b in looped if not (c == 1 and b == JUVEDERM)]
-        if juv != (c == 1 and JUVEDERM in looped):
+        extra = [b for b in looped if not (c in JUVEDERM_CATS and b == JUVEDERM)]
+        if juv != (c in JUVEDERM_CATS and JUVEDERM in looped):
             R.err(f'Q11_{c}: Ювидерм (оценка {scores.get(JUVEDERM)}) {"" if juv else "не "}должен быть в цикле')
         if [b for b in extra if b not in others]:
             R.err(f'Q11_{c}: в цикле бренды без оценки 0–6: {[b for b in extra if b not in others]}')
