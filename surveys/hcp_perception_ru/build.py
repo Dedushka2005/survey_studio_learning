@@ -520,11 +520,11 @@ for c in CATS:
              f'<p>Исходный бренд: {{Q15_{c}_FROM_TXT}}</p><p><b>Бренд, на который перешли:</b></p>',
       name=f'Q15_{c}_TO', Condition=switch_same, flags={'RandomizeAnswers': True}, AnswerList=brand_list,
       before=f'''
-// исходный бренд выбрать нельзя
+// исходный бренд выбрать нельзя (кроме «Другое»)
 let from = Q15_{c}_FROM.getCheckedCode();
 V['Q15_{c}_FROM_TXT'] = from === 96 ? Q15_{c}_FROM[96].openValueTxt : Q15_{c}_FROM[from].plainText;
 Q.showAll();
-Q.hide(from);
+if (from !== 96) Q.hide(from);   // «Другое» не прятать: переход с одного неуказанного бренда на другой (30.10.2026)
 ''')
     q(n(16, c), 'MultipleChoice', head + '<p>Каковы были <b>основные причины такого перехода?</b></p>',
       name=f'Q16_{c}', comment='Выберите не более 3 вариантов', flags={'RandomizeAnswers': True},

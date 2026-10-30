@@ -704,7 +704,7 @@
       },
       "ExportedSurveyFlags": {},
       "OutputColumnTemplate": "Q15_1_TO",
-      "ScriptBeforeShow": "// исходный бренд выбрать нельзя\nlet from = Q15_1_FROM.getCheckedCode();\nV['Q15_1_FROM_TXT'] = from === 96 ? Q15_1_FROM[96].openValueTxt : Q15_1_FROM[from].plainText;\nQ.showAll();\nQ.hide(from);",
+      "ScriptBeforeShow": "// исходный бренд выбрать нельзя (кроме «Другое»)\nlet from = Q15_1_FROM.getCheckedCode();\nV['Q15_1_FROM_TXT'] = from === 96 ? Q15_1_FROM[96].openValueTxt : Q15_1_FROM[from].plainText;\nQ.showAll();\nif (from !== 96) Q.hide(from);   // «Другое» не прятать: переход с одного неуказанного бренда на другой (30.10.2026)",
       "Condition": "Q11400(row = 1 and code = 1)",
       "AnswerList": "Q15 бренды кат.1"
     },
@@ -746,7 +746,7 @@
       },
       "ExportedSurveyFlags": {},
       "OutputColumnTemplate": "Q15_2_TO",
-      "ScriptBeforeShow": "// исходный бренд выбрать нельзя\nlet from = Q15_2_FROM.getCheckedCode();\nV['Q15_2_FROM_TXT'] = from === 96 ? Q15_2_FROM[96].openValueTxt : Q15_2_FROM[from].plainText;\nQ.showAll();\nQ.hide(from);",
+      "ScriptBeforeShow": "// исходный бренд выбрать нельзя (кроме «Другое»)\nlet from = Q15_2_FROM.getCheckedCode();\nV['Q15_2_FROM_TXT'] = from === 96 ? Q15_2_FROM[96].openValueTxt : Q15_2_FROM[from].plainText;\nQ.showAll();\nif (from !== 96) Q.hide(from);   // «Другое» не прятать: переход с одного неуказанного бренда на другой (30.10.2026)",
       "Condition": "Q11400(row = 2 and code = 1)",
       "AnswerList": "Q15 бренды кат.2"
     },
@@ -788,7 +788,7 @@
       },
       "ExportedSurveyFlags": {},
       "OutputColumnTemplate": "Q15_3_TO",
-      "ScriptBeforeShow": "// исходный бренд выбрать нельзя\nlet from = Q15_3_FROM.getCheckedCode();\nV['Q15_3_FROM_TXT'] = from === 96 ? Q15_3_FROM[96].openValueTxt : Q15_3_FROM[from].plainText;\nQ.showAll();\nQ.hide(from);",
+      "ScriptBeforeShow": "// исходный бренд выбрать нельзя (кроме «Другое»)\nlet from = Q15_3_FROM.getCheckedCode();\nV['Q15_3_FROM_TXT'] = from === 96 ? Q15_3_FROM[96].openValueTxt : Q15_3_FROM[from].plainText;\nQ.showAll();\nif (from !== 96) Q.hide(from);   // «Другое» не прятать: переход с одного неуказанного бренда на другой (30.10.2026)",
       "Condition": "Q11400(row = 3 and code = 1)",
       "AnswerList": "Q15 бренды кат.3"
     },
