@@ -162,10 +162,13 @@ def run(path, check, links, min_dur, loi='~40'):
         R = Resp(row, cols)
         check(R, links)
         total += len(R.errs)
-        dur = num(row.get('IVDur')) or 0   # IVDur в выгрузке — в минутах
+        # IVDur — только последняя сессия; полная длительность — IVDurAll (сумма сессий), IVCnt — число сессий (мин.)
+        dur = num(row.get('IVDurAll')) if 'IVDurAll' in row else num(row.get('IVDur'))
+        dur, cnt = dur or 0, int(num(row.get('IVCnt')) or 1)
         if dur < min_dur:
             R.warn(f'длительность {dur:g} мин (< {min_dur}, заявлено {loi})')
-        print(f'\n=== Rid {row["Rid"]:g}  ({row["IVDate1"]}, {dur:g} мин) ===')
+        sess = f', {cnt} сесс.' if cnt > 1 else ''
+        print(f'\n=== Rid {row["Rid"]:g}  ({row["IVDate1"]}, {dur:g} мин{sess}) ===')
         for e in R.errs:
             print('  ERR ', e)
         for w in R.warns:

@@ -23,7 +23,7 @@ JUVEDERM = 2
 ALLERGAN = 1
 COMPANIES = list(range(1, 21)) + [96]
 CHANNELS = list(range(1, 13)) + [96]
-MIN_DUR = 15  # мин (IVDur в выгрузке — в минутах); быстрее — подозрение на «пролистывание», LOI ~40
+MIN_DUR = 15  # мин (IVDurAll — сумма сессий, в минутах); быстрее — подозрение на «пролистывание», LOI ~40
 
 
 def check(resp, links):

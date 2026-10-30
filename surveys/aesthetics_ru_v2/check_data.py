@@ -20,7 +20,7 @@ from build import (AREAS, BRANDS, CITIES, JUVEDERM, JUVEDERM_ANY_SCORE, NPS_EXTR
 
 LINKS = os.path.join(HERE, 'links', 'aesthetics_ru_v2_links_7000.xlsx')
 CATS = (1, 2, 3)
-MIN_DUR = 15      # мин (IVDur — в минутах); заявлено 30–40
+MIN_DUR = 15      # мин (IVDurAll — сумма сессий, в минутах); заявлено 30–40
 MIN_PRICE = 500   # руб.; цена сеанса / мл ниже — подозрительно
 MAX_ML = 10       # мл на пациента за сеанс; больше — подозрительно
 
