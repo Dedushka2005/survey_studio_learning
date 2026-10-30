@@ -67,7 +67,7 @@ function requireRowText(q, code) {
 function copyOtherText(src, dst, code) {
     if (dst.rows[code] === undefined || src.rows[code] === undefined) return;
     let txt = src.rows[code].openValueTxt;
-    dst.rows[code].text = txt ? 'Другое: ' + txt : 'Другое';
+    setTexts(dst.rows[code], {ru: txt ? 'Другое: ' + txt : 'Другое', en: txt ? 'Other: ' + txt : 'Other'});
 }
 
 // Текст выбранных ответов через запятую (для «другого» — вписанный текст).
@@ -124,12 +124,56 @@ function requireSum(q, target) {
 //   resetRowMarks(Q);
 //   if (…) return rowError(Q, code, 'Ранее вы сказали, что …');
 function rowError(q, code, message) {
-    q.rows[code].text = '<font color="red"><b>' + q.rows[code].plainText + '</b></font>';
+    rewrapText(q.rows[code], t => '<font color="red"><b>' + t + '</b></font>');
     return error(message);
 }
 
 function resetRowMarks(q) {
-    for (let row of q.rows.getVisible()) row.text = row.plainText;
+    for (let row of q.rows.getVisible()) rewrapText(row, t => t);
+}
+
+// ---- Многоязычные анкеты ----
+// Присвоить .text в многоязычной анкете нельзя («Unable to edit text in a multilingual survey»):
+// текст меняется отдельно для каждого языка через textLocalizations. Для такой анкеты в «Функциях»
+// объявить список языков:  const LANGS = [Language.ru, Language.en];
+// Без LANGS функции ниже работают как в обычной анкете (через .text).
+
+// Изменить текст вопроса/ответа/строки/колонки: f(старый текст) -> новый, для каждого языка.
+//   editText(Q.rows[5], t => '<b>' + t + '</b>');
+function editText(obj, f) {
+    if (typeof LANGS === 'undefined') {
+        obj.text = f(String(obj.text));
+        return;
+    }
+    for (let L of LANGS) obj.textLocalizations[L] = f(String(obj.textLocalizations[L]));
+}
+
+// Задать текст явно для каждого языка: setTexts(Q[99], {ru: 'Ни один из перечисленных', en: 'None of the above'})
+function setTexts(obj, texts) {
+    if (typeof LANGS === 'undefined') {
+        obj.text = texts.ru;
+        return;
+    }
+    for (let L of LANGS) obj.textLocalizations[L] = texts[L];
+}
+
+// Заменить текст на wrap(текст без разметки) — для подсветки строк (rowError / resetRowMarks).
+function rewrapText(obj, wrap) {
+    if (typeof LANGS === 'undefined') {
+        obj.text = wrap(obj.plainText);
+        return;
+    }
+    for (let L of LANGS) obj.textLocalizations[L] = wrap(stripTags(obj.textLocalizations[L]));
+}
+
+function stripTags(s) {
+    return String(s).replace(/<[^>]*>/g, '');
+}
+
+// Текст на языке респондента (для error(), переменных подстановки): tr({ru: 'Ошибка', en: 'Error'})
+function tr(texts) {
+    let lang = String(getCurrentLanguage());
+    return texts[lang] !== undefined ? texts[lang] : texts.ru;
 }
 
 // Строка «Другое» таблицы с НЕСКОЛЬКИМИ ответами (галочку респондент снимает сам):

@@ -18,6 +18,7 @@
 """
 import json
 import os
+import re
 import shutil
 import subprocess
 import tempfile
@@ -284,6 +285,7 @@ class Questionnaire:
         self.check_other_choice_rows(data)
         self.check_references(data)
         self.check_js_syntax(data)
+        self.check_multilingual_text(data)
 
     @staticmethod
     def check_other_choice_rows(data):
@@ -351,6 +353,22 @@ class Questionnaire:
                     if int(num) not in numbers:
                         problems.append(f"Q{x['Number']} условие: нет вопроса Q{num}")
         assert not problems, '\n'.join(problems)
+
+    @staticmethod
+    def check_multilingual_text(data):
+        """Многоязычная анкета: присвоение .text в скриптах падает в системе («Unable to edit text in a
+        multilingual survey») — нужны editText / setTexts / rewrapText из ss_lib.js и const LANGS в «Функциях»."""
+        if len(data.get('SupportedLanguages') or []) < 2:
+            return
+        scripts = [(k, data.get(k, '')) for k in ('ScriptPreProcessing', 'ScriptPostProcessing',
+                                                  'ScriptBeforeShow', 'ScriptAfterAnswer')]
+        scripts += [(f"Q{x['Number']} {k}", x[k]) for x in data['Questions']
+                    for k in ('ScriptBeforeShow', 'ScriptAfterAnswer') if x.get(k)]
+        bad = [name for name, body in scripts if re.search(r'\.text\s*=(?!=)', body or '')]
+        funcs = data.get('ScriptGlobalFunctions', '')
+        if not re.search(r'\bLANGS\s*=', funcs):
+            bad.append('Функции: нет const LANGS = [Language.ru, …]')
+        assert not bad, ('многоязычная анкета, .text менять нельзя (editText/setTexts): ' + '; '.join(bad))
 
     @staticmethod
     def check_js_syntax(data):
