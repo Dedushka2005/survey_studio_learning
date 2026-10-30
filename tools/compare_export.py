@@ -1,20 +1,23 @@
 #!/usr/bin/env python3
 """Сверка выгрузки анкеты из SURVEYSTUDIO с JSON, собранным build.py.
 
-    python3 tools/compare_export.py surveys/<проект>/<проект>.json <выгрузка из системы>.json
+    python3 tools/compare_export.py surveys/<проект>/<проект>.json <выгрузка из системы>.json [--functions]
 
 Печатает различающиеся поля (REPO — репозиторий, SYS — система) без шума от значений по умолчанию,
 которые система добавляет при выгрузке (DisplayMode, ButtonStartPlacement и т.п.).
 Раздел «Функции» не сравнивается построчно: проверяется только, что все функции библиотеки,
 вызываемые в скриптах вопросов, в системе определены (сам раздел при правках вручную не обновляется).
+--functions — дополнительно построчный diff «Функций» (например, после ручной правки одной функции в системе).
 """
+import difflib
 import json
 import re
 import sys
 
 # Поля, которые система выгружает со значениями по умолчанию, а сборщик не пишет
+# (ImageAlignment, *TemplateSeparator, MultipleChoiceExportMode — в формате выгрузки с 30.10.2026)
 NOISE = ('AllowedAttachmentsType', 'AnswersSumControlMode', 'ButtonStartPlacement', 'DisplayMode',
-         'ImageSize', 'Placement')
+         'ImageSize', 'Placement', 'ImageAlignment', 'TemplateSeparator', 'MultipleChoiceExportMode')
 EMPTY = (False, None, '', 'None', 'Default', 0)
 
 
@@ -53,7 +56,7 @@ def missing_functions(repo, sys_):
     return sorted((called & lib) - defined)
 
 
-def main(repo_path, sys_path):
+def main(repo_path, sys_path, functions=False):
     repo, sys_ = json.load(open(repo_path)), json.load(open(sys_path))
     a, b = flatten(repo), flatten(sys_)
     found = 0
@@ -70,6 +73,11 @@ def main(repo_path, sys_path):
         print('/'.join(k))
         print('  REPO:', repr(a.get(k))[:1500])
         print('  SYS :', repr(b.get(k))[:1500])
+    if functions:
+        fa = (repo.get('ScriptGlobalFunctions') or '').replace('\r', '').splitlines()
+        fb = (sys_.get('ScriptGlobalFunctions') or '').replace('\r', '').splitlines()
+        for line in difflib.unified_diff(fa, fb, 'REPO', 'SYS', lineterm='', n=1):
+            print('  ' + line)
     missing = missing_functions(repo, sys_)
     if missing:
         print('!!! В разделе «Функции» системы нет вызываемых функций:', ', '.join(missing))
@@ -78,6 +86,7 @@ def main(repo_path, sys_path):
 
 
 if __name__ == '__main__':
-    if len(sys.argv) != 3:
+    args = [a for a in sys.argv[1:] if a != '--functions']
+    if len(args) != 2:
         sys.exit(__doc__)
-    main(sys.argv[1], sys.argv[2])
+    main(args[0], args[1], functions='--functions' in sys.argv)
