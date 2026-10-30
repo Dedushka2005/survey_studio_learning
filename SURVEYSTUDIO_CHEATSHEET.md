@@ -530,7 +530,8 @@ AnswerNumberFrom, AnswerNumberTo, ScriptBeforeShow, ScriptAfterAnswer, BeforeSho
     `setTexts(Q[99], {ru: 'Ни один из перечисленных', en: 'None of the above'})` — задать текст по языкам;
     `editText(obj, t => …)` — изменить текст каждого языка; `rowError`/`resetRowMarks` уже переведены на
     `rewrapText` и подсвечивают строку на всех языках.
-  - Читать `.text`/`.plainText` можно (текст на языке респондента, ⚠️ не проверено).
+  - Читать `.text`/`.plainText` можно — ✅ без ошибки (Q26 берёт `Q19[код].text`); что это текст на языке
+    респондента — ⚠️ не проверено отдельно.
   - Всё, что видит респондент из скрипта, — на его языке: `error(tr({ru: 'Ранее Вы сказали…', en: 'Earlier you said…'}))`,
     переменные подстановки `V['x'] = tr({ru: 'прекратить выписку', en: 'stop prescribing'})`, тексты
     скринаута/завершения (`exitWithResult(…, tr({…}))`).
@@ -697,5 +698,8 @@ AnswerNumberFrom, AnswerNumberTo, ScriptBeforeShow, ScriptAfterAnswer, BeforeSho
   нужно для каждого языка: `row.textLocalizations[Language.ru] = …`, `row.textLocalizations[Language.en] = …`
   (`kb/help_scripts_2005.md`, то же у вопроса/ответа/колонки). Язык респондента — `getCurrentLanguage()`
   (возвращает `'ru'`, `'en'`…, `kb/help_scripts_2001.md`) — для текстов `error()` и переменных подстановки.
-  ⚠️ Запись в `textLocalizations` и сравнение `getCurrentLanguage() === 'en'` ещё не проверены в системе.
+  ✅ Исправление проверено пользователем 30.10.2026 (Q26, Q33, Q37 — подсветка строки через `textLocalizations` по
+  каждому языку + текст ошибки через `getCurrentLanguage() === 'en'`; Q39 — текст варианта через `textLocalizations`).
+  Проверялся вариант с самодостаточными функциями `markRow`/`tr(ru, en)` в «Функциях» анкеты; `ss_lib.js` делает то же
+  (`rewrapText`/`setTexts`/`tr({ru, en})`), но в системе в таком виде ещё не запускался ⚠️.
   Правило и функции — раздел 8, «Многоязычные анкеты».
