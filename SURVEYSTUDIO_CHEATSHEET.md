@@ -321,6 +321,16 @@ AnswerNumberFrom, AnswerNumberTo, ScriptBeforeShow, ScriptAfterAnswer, BeforeSho
   }
   ```
   В вопросе: `if (Q.isChecked(3) || Q.isChecked(4)) return screenOut();`
+- **Фильтры показа — известными приёмами, чтобы базы в ADL ставились сами** (pyTools/SS2ADL `scripts.py`, 30.10.2026;
+  рекомендация, не запрет). SS2ADL переводит в `base` скрипты «Перед показом» вида
+  `Q.rows.hideAll(); Q.rows.show(Q20.getCheckedCodes()); Q.rows.hide(99);`, `Q.answers.show(Q19.getCheckedCodes(), 99)`,
+  `return Q.rows.hasVisible ? ok : skip;` / `return Q.answers.visibleCount > 1 ? ok : skip;` (с автоответом
+  `if (Q.….visibleCount == 1) { …; return answered; }` и без), `if (!Q32[98].checked) Q.rows.hide(98);`,
+  цикл `for (let r of Q33.rows.getVisibleCodes()) { if (Q33.rows[r].getChecked()[0].code >= 1 && …) Q.rows.show(r); }`,
+  `showRowsWhere(Q, function (code) { return Q7_1.isChecked(code); })`, `Q.showOnly(Q25.getCheckedCodes())`, и
+  источники циклов «`Q.reset(); for (…) { if (…) Q[…].checked = true; } return Q.isAnswered ? answered : skip;`».
+  Свои функции в условии (`catActive(code)`, `assessedBrands(1)`) он не разбирает — у таких вопросов база в ADL
+  ставится руками. Нужна база автоматически — условие писать прямо в скрипте, через `QN.isChecked(code)` и т. п.
 - Анкета собирается генератором на Python (`surveys/<проект>/build.py` → JSON для импорта), а не вручную в редакторе.
   Правки вносятся в генератор, затем файл пересобирается. Новая анкета — копия `surveys/_template/`.
 - **Общая библиотека** (использовать во всех анкетах, пополнять удачными находками):
@@ -743,3 +753,18 @@ AnswerNumberFrom, AnswerNumberTo, ScriptBeforeShow, ScriptAfterAnswer, BeforeSho
   `RowCodeTemplateSeparator` ('xr'), `ColumnCodeTemplateSeparator` ('_'), `CycleTemplateSeparator` ('.'),
   `MultipleChoiceExportMode` (1) — значения по умолчанию, `compare_export.py` их не показывает.
   `compare_export.py --functions` — построчный diff раздела «Функции».
+- ✅ **Цикл без места итерации в шаблоне** (анкета другого программиста «Тест2 Репчек КЗ», `.sav` 30.10.2026): если у
+  вопроса внутри `questions.repeat` шаблон без `{3}` (`QB8`), система сама дописывает итерацию через
+  `CycleTemplateSeparator` анкеты: `QB8xc2_1` = итерация 2 (код ответа источника), слот 1 — в этой анкете
+  разделитель был `'xc'` (у нас по умолчанию `'.'`; HCP — шаблоны `Q23_{3}` → `Q23_<код>.<код>…`). Разделители
+  строк/слотов (`xr`, `_`) — те же поля анкеты. pyTools/SS2ADL читает оба вида.
+- ✅ **Подстановка итерации** встречается и как `{answerText}`, и как `{AnswerText}` (Репчек КЗ) — система понимает оба.
+  Номер итерации в тексте — через переменную: `V['QD2_num'] = Q.sourceAnswerCode;` и `{QD2_num}` в тексте.
+- ✅ **Служебный источник цикла можно отметить из скрипта другого вопроса** (Репчек КЗ: `QD_order`, условие `false`,
+  все коды отмечает «Перед показом» D1 — `for (let c of Q8003.getCodes()) Q8003[c].checked = true;`, а
+  `Q.rows.setOrder(Q8003.answers.getCodes())` даёт D1 и циклу D2 один случайный порядок).
+- ✅ **Выгрузка .sav без интервью** — только структура (705 колонок, 0 строк): по ней видно имена колонок, но
+  ADL-скрипт по ней не собрать — для SS2ADL нужна выгрузка хотя бы с одним (тестовым) интервью.
+- ✅ **Метка в начале текста вопроса** («B8. Вы отметили…», «S3.1. …») — SS2ADL переносит её в номер подписи оси
+  (`B8.2. Биденза. Вы отметили…`), так что отдельной метки в тексте достаточно; в наших анкетах номера в тексте нет,
+  там подпись — по шаблону (`Q8_1`).
