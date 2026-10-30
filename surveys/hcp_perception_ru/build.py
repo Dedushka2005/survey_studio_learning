@@ -41,15 +41,18 @@ BRANDS = {
         8: 'Princess / Принцесс', 9: 'Perfectha / Перфекта', 10: 'Revanesse / Реванесс',
         11: 'Sardenya / Сардиния', 12: 'HYAFILIA / ХИАФИЛИЯ', 13: 'Art Filler / Арт филлер',
         14: 'Amalain / Амалайн', 15: 'Revofil / Ревофил', 16: 'Revi / Реви', 17: 'Tesoro / Тесоро',
-        18: 'Novacutan DVS / Новакутан ДВС'},
+        18: 'Novacutan DVS / Новакутан ДВС', 34: 'Neauvia Organic / Ньювиа Органик'},
+    # ТЗ 29.10.2026: в кат.2 добавлены бренды кат.1 с теми же кодами (1, 4, 16, 5, 2), в кат.1 — код 34
     2: {19: 'Profhilo / Профайло', 20: 'Jalupro / Ялупро', 21: 'IAL-System / ИАЛ-Систем',
         22: 'Hyalual / Гиалуаль', 23: 'Novacutan / Новакутан', 24: 'Neauvia Hydro / Ньювиа Гидро',
-        25: 'Plinest / Плинест'},
+        25: 'Plinest / Плинест', 1: 'Belotero / Белотеро', 4: 'Teosyal / Теосиаль', 16: 'Revi / Реви',
+        5: 'Stylage / Стилаж', 2: 'Juvederm / Ювидерм'},
     3: {26: 'Radiesse / Радиесс', 27: 'Sculptra / Скульптра', 28: 'AestheFill / Эстефил',
         29: 'Juvelook / Джувелук', 30: 'Collost / Коллост', 31: 'SferoGel / СФЕРОгель',
         32: 'Renaissance / Ренессанс', 33: 'Novacutan YBio / Новакутан Ю Био'},
 }
-JUVEDERM = 2  # всегда оценивается в категории 1 (Q9-Q10), даже если не выбран в Q7
+JUVEDERM = 2  # всегда оценивается в Q9-Q10 категорий JUVEDERM_CATS, даже если не выбран в Q7
+JUVEDERM_CATS = (1, 2)   # 30.10.2026: Ювидерм есть и в кат.2 (ТЗ 29.10, «Ювидерм_[КАТ]»)
 COMPANIES = {
     1: 'Allergan Aesthetics / AbbVie', 2: 'Биомир Сервис', 3: 'BNC Korea', 4: 'Caregen', 5: 'CGBio',
     6: 'CHA Meditech', 7: 'CLS International', 8: 'Croma-Pharma', 9: 'Dr. Korman Laboratories',
@@ -946,7 +949,8 @@ for k, qtype, text, flags, cond, extra in ae_items:
 # ----------------------------------------------------------------------------
 # Глобальные функции и Подготовка
 # ----------------------------------------------------------------------------
-brand_names_js = ',\n        '.join(f'{code}: {js_str(name)}' for c in BRANDS for code, name in BRANDS[c].items())
+BRAND_NAMES = {code: name for c in BRANDS for code, name in BRANDS[c].items()}   # коды общие для категорий
+brand_names_js = ',\n        '.join(f'{code}: {js_str(name)}' for code, name in BRAND_NAMES.items())
 company_names_js = ',\n        '.join(f'{code}: {js_str(name)}' for code, name in COMPANIES.items())
 
 qnr.global_functions = f'''
@@ -960,10 +964,10 @@ function q7(cat) {{
     return [null, Q7_1, Q7_2, Q7_3][cat];
 }}
 
-// Бренды категории для Q9-Q10: выбранные в Q7 (кроме 97) + Ювидерм в категории 1
+// Бренды категории для Q9-Q10: выбранные в Q7 (кроме 97) + Ювидерм в категориях {', '.join(map(str, JUVEDERM_CATS))}
 function assessedBrands(cat) {{
     let codes = q7(cat).getCheckedCodes().filter(function (code) {{ return code !== 97; }});
-    if (cat === 1 && codes.indexOf({JUVEDERM}) === -1) codes.push({JUVEDERM});
+    if (({' || '.join(f'cat === {c}' for c in JUVEDERM_CATS)}) && codes.indexOf({JUVEDERM}) === -1) codes.push({JUVEDERM});
     return codes;
 }}
 

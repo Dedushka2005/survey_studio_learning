@@ -18,8 +18,10 @@ from ss_check import empty, is_flat, load_links, num, run, txt  # noqa: E402
 LINKS = os.path.join(HERE, 'links', 'hcp_perception_ru_links_5000.xlsx')
 
 CATS = (1, 2, 3)
-BRANDS = {1: list(range(1, 19)), 2: list(range(19, 26)), 3: list(range(26, 34))}
+BRANDS = {1: list(range(1, 19)) + [34], 2: list(range(19, 26)) + [1, 4, 16, 5, 2],  # ТЗ 29.10.2026
+          3: list(range(26, 34))}
 JUVEDERM = 2
+JUVEDERM_CATS = (1, 2)
 ALLERGAN = 1
 COMPANIES = list(range(1, 21)) + [96]
 CHANNELS = list(range(1, 13)) + [96]
@@ -71,7 +73,7 @@ def check(resp, links):
         if bad:
             R.err(f'Q7_{c}: коды не из категории {bad}')
         assessed = [b for b in q7 if b != 97]
-        if c == 1 and a and JUVEDERM not in assessed:
+        if c in JUVEDERM_CATS and a and JUVEDERM not in assessed:
             assessed.append(JUVEDERM)
         # Q8
         t8 = R.check_rows(f'Q8_{c}', [k for k in range(1, 19)] + ([96] if f'Q8_{c}xr96' in R.r and
