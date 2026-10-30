@@ -42,10 +42,12 @@ BRANDS = {
         8: 'Princess / Принцесс', 9: 'Perfectha / Перфекта', 10: 'Revanesse / Реванесс',
         11: 'Sardenya / Сардиния', 12: 'HYAFILIA / ХИАФИЛИЯ', 13: 'Art Filler / Арт филлер',
         14: 'Amalain / Амалайн', 15: 'Revofil / Ревофил', 16: 'Revi / Реви', 17: 'Tesoro / Тесоро',
-        18: 'Novacutan DVS / Новакутан ДВС'},
+        18: 'Novacutan DVS / Новакутан ДВС', 34: 'Neauvia Organic / Ньювиа Органик'},
+    # ТЗ V3 (29.10.2026): в кат.2 добавлены бренды кат.1 с теми же кодами (1, 4, 16, 5, 2), в кат.1 — код 34
     2: {19: 'Profhilo / Профайло', 20: 'Jalupro / Ялупро', 21: 'IAL-System / ИАЛ-Систем',
         22: 'Hyalual / Гиалуаль', 23: 'Novacutan / Новакутан', 24: 'Neauvia Hydro / Ньювиа Гидро',
-        25: 'Plinest / Плинест'},
+        25: 'Plinest / Плинест', 1: 'Belotero / Белотеро', 4: 'Teosyal / Теосиаль', 16: 'Revi / Реви',
+        5: 'Stylage / Стилаж', 2: 'Juvederm / Ювидерм'},
     3: {26: 'Radiesse / Радиесс', 27: 'Sculptra / Скульптра', 28: 'AestheFill / Эстефил',
         29: 'Juvelook / Джувелук', 30: 'Collost / Коллост', 31: 'SferoGel / СФЕРОгель',
         32: 'Renaissance / Ренессанс', 33: 'Novacutan YBio / Новакутан Ю Био'},
@@ -603,7 +605,8 @@ for k, qtype, text, flags, cond, extra in ae_items:
 # ----------------------------------------------------------------------------
 # Глобальные функции и Подготовка
 # ----------------------------------------------------------------------------
-brand_names_js = ',\n        '.join(f'{code}: {js_str(name)}' for c in BRANDS for code, name in BRANDS[c].items())
+BRAND_NAMES = {code: name for c in BRANDS for code, name in BRANDS[c].items()}   # коды общие для категорий
+brand_names_js = ',\n        '.join(f'{code}: {js_str(name)}' for code, name in BRAND_NAMES.items())
 
 qnr.global_functions = f'''
 // Врач проводит процедуры категории (S3 > 0)
