@@ -20,6 +20,22 @@ def txt(v):
     return '' if empty(v) else str(v).strip()
 
 
+# Бессодержательные ответы в поле «Другое» (поле поля HCP 16–29.10.2026): «Далее», «Важно», «Не понятен вопрос»…
+JUNK_WORDS = {'далее', 'да', 'не', 'нет', 'нету', 'не знаю', 'важно', 'очень важно', 'не понятен вопрос',
+              'в чем вопрос', 'в чём вопрос', 'ничего', 'ничего более', 'более добавить нечего', 'всё перечислено',
+              'все перечислено', 'всё вышеперечисленное', 'все вышеперечисленное', 'препарат', 'затрудняюсь ответить'}
+
+
+def is_junk(v, words=True):
+    """Ответ без содержания: только цифры/знаки («0», «40», «-», «.») или, при words, слово-заглушка из JUNK_WORDS."""
+    s = txt(v).lower().strip(' .!?')
+    if not txt(v):
+        return False
+    if re.fullmatch(r'[\d\s.,%+\-–/]*', s):
+        return True
+    return words and s in JUNK_WORDS
+
+
 class Resp:
     def __init__(self, row, cols):
         self.r = row
@@ -85,8 +101,17 @@ class Resp:
             self.err(f'{base}: выбрано «Другое» без текста')
         if not chosen and t:
             self.err(f'{base}: текст «Другое» без отметки ({t!r})')
-        if chosen and t and len(t) < 3:
+        if chosen and t and is_junk(t):
+            self.warn(f'{base}: бессодержательный текст «Другое» {t!r}')
+        elif chosen and t and len(t) < 3:
             self.warn(f'{base}: короткий текст «Другое» {t!r}')
+
+    def check_open(self, name, label=None, words=False):
+        """Открытый ответ: замечание, если он без содержания (только цифры/знаки; при words — и слова-заглушки)."""
+        t = txt(self.v(name))
+        if is_junk(t, words):
+            self.warn(f'{label or name}: ответ без содержания {t!r}')
+        return t
 
     def check_other_row(self, base, code=96):
         """Числовая строка «Другое» в таблице (requireRowText): число > 0 — нужен текст, текст — нужно число."""

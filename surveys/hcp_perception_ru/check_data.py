@@ -13,7 +13,7 @@ import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(HERE, '..', '..', 'tools'))
-from ss_check import empty, is_flat, load_links, num, run, txt  # noqa: E402
+from ss_check import empty, is_flat, is_junk, load_links, num, run, txt  # noqa: E402
 
 LINKS = os.path.join(HERE, 'links', 'hcp_perception_ru_links_5000.xlsx')
 
@@ -22,6 +22,8 @@ BRANDS = {1: list(range(1, 19)) + [34], 2: list(range(19, 26)) + [1, 4, 16, 5, 2
           3: list(range(26, 34))}
 JUVEDERM = 2
 JUVEDERM_CATS = (1, 2)
+# Ювидерм обязателен в Q9–Q10 кат.2 только с этой даты (новые марки внесены в систему 30.10.2026)
+JUVEDERM_CAT2_FROM = (2026, 10, 30)
 ALLERGAN = 1
 COMPANIES = list(range(1, 21)) + [96]
 CHANNELS = list(range(1, 13)) + [96]
@@ -30,6 +32,8 @@ MIN_DUR = 15  # мин (IVDurAll — сумма сессий, в минутах)
 
 def check(resp, links):
     R = resp
+    d, m, y = (int(x) for x in str(R.v('IVDate1')).split()[0].split('.'))
+    new_brands = (y, m, d) >= JUVEDERM_CAT2_FROM
     rid, ext = num(R.v('Rid')), txt(R.v('RespExtID'))
     if links.get(ext) != rid:
         R.err(f'Rid {rid} не соответствует extid {ext} по базе (там {links.get(ext)})')
@@ -73,7 +77,7 @@ def check(resp, links):
         if bad:
             R.err(f'Q7_{c}: коды не из категории {bad}')
         assessed = [b for b in q7 if b != 97]
-        if c in JUVEDERM_CATS and a and JUVEDERM not in assessed:
+        if (c == 1 or (c in JUVEDERM_CATS and new_brands)) and a and JUVEDERM not in assessed:
             assessed.append(JUVEDERM)
         # Q8
         t8 = R.check_rows(f'Q8_{c}', [k for k in range(1, 19)] + ([96] if f'Q8_{c}xr96' in R.r and
@@ -81,6 +85,8 @@ def check(resp, links):
                           asked=a, allowed={1, 2, 3, 4, 5, 99})
         if a:
             R.check_other(f'Q8_{c}', 96 in t8, f'Q8_{c}xr96_T')
+            if t8.get(96) not in (None, 99) and is_junk(R.v(f'Q8_{c}xr96_T')):
+                R.warn(f'Q8_{c}: оценка {t8[96]:g} у «Другое» без содержания {txt(R.v(f"Q8_{c}xr96_T"))!r} — почистить')
             same_answer(R, f'Q8_{c}', t8)
         # Q9
         t9 = R.check_rows(f'Q9_{c}', range(1, 19), asked=a)
@@ -128,7 +134,11 @@ def check(resp, links):
                            asked=c in active)
         if c in active and 1 not in t18:
             R.err(f'Q18_{c}: не заполнено первое поле')
+        for k in t18:
+            R.check_open(f'Q18_{c}xr{k}', f'Q18_{c} поле {k}')
     t19 = R.check_rows('Q19', [1, 2, 3])
+    for k in t19:
+        R.check_open(f'Q19xr{k}', f'Q19 кат.{k}')
     for k, val in t19.items():
         if len(txt(val)) < 3:
             R.err(f'Q19: строка {k} короче 3 символов ({val!r})')
@@ -138,6 +148,8 @@ def check(resp, links):
     # --- раздел 4 ---
     if empty(R.v('Q20xr1')):
         R.err('Q20: не заполнено первое упоминание')
+    for k in range(1, 6):
+        R.check_open(f'Q20xr{k}', f'Q20 упоминание {k}')
     q21 = R.check_multi('Q21', none_code=97)
     rows22 = sorted(set([ALLERGAN] + [k for k in q21 if k != 97]))
     t22 = R.check_rows('Q22', rows22, lo=0, hi=99)
@@ -206,14 +218,14 @@ def check(resp, links):
     t37 = R.check_rows('Q37', [k for k in list(range(1, 7)) + [96] if not empty(R.v(f'Q37xr{k}'))], lo=0, hi=100)
     if abs(sum(v for v in t37.values() if not isinstance(v, str)) - 100) > 1e-9:
         R.err(f'Q37: сумма ≠ 100 ({t37})')
-    R.check_other('Q37', t37.get(96, 0) > 0, 'Q37xr96T')
+    R.check_other_row('Q37')   # числовая строка «Другое»: текст при 0 — замечание, не ошибка
     R.check_rows('Q38', [k for k, v in t37.items() if v > 0], allowed={1, 2, 3})
     R.check_multi('Q39', mx=3)
     R.check_single('Q40', allowed={1, 2, 3, 4, 5, 99})
     q41 = R.check_multi('Q41', mn=3, mx=3)
     rank_check(R, 'Q41_RANK', q41, list(range(1, 10)) + [96])
     for name in ('Q42', 'Q43'):
-        t = txt(R.v(name))
+        t = R.check_open(name)
         if not t:
             R.err(f'{name}: нет ответа')
         elif name == 'Q43' and len(t) < 5:
