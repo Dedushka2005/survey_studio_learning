@@ -58,6 +58,21 @@ OTHER_ROW = {'OpenValueTxt': True, 'AllowEmptyOpenValue': True, 'DisableReorderi
 OTHER_CHOICE_ROW = OTHER_ROW | OPT_ROW
 
 
+# Копии вопроса по категориям: номер категории — через «x», а не «_» (соглашение 31.10.2026,
+# шпаргалка, раздел 8): Q9x1, Q10x1 (строки таблицы — Q10x1xr3), цикл Q11x1_{3}, SVC11x1.
+CAT_SEP = 'x'
+
+
+def cat_name(base, cat, tail=''):
+    """Имя копии вопроса для категории: cat_name('Q9', 1) -> 'Q9x1', cat_name('Q11', 2, '_{3}') -> 'Q11x2_{3}'.
+
+    «_» в выгрузке уже занят: слот множественного выбора (Q9_3), итерация цикла (Q11_19.19), и
+    Q9_1_3 не отличить от «вопрос Q9_1, слот 3» и «вопрос Q9, категория 1, слот 3» без анкеты.
+    С «x» имя категории читается однозначно и в ADL (ADLStudio, SAV2Convert, SS2ADL).
+    """
+    return f'{base}{CAT_SEP}{cat}{tail}'
+
+
 def js_str(text):
     """Строка Python -> строковый литерал JavaScript."""
     return json.dumps(text, ensure_ascii=False)
