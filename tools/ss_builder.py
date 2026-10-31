@@ -59,12 +59,16 @@ OTHER_CHOICE_ROW = OTHER_ROW | OPT_ROW
 
 
 # Копии вопроса по категориям: номер категории — через «x», а не «_» (соглашение 31.10.2026,
-# шпаргалка, раздел 8): Q9x1, Q10x1 (строки таблицы — Q10x1xr3), цикл Q11x1_{3}, SVC11x1.
+# шпаргалка, раздел 8): Q9x1, Q10x1 (строки таблицы — Q10x1xr3), цикл Q11x1 (в выгрузке Q11x1xc6_1), SVC11x1.
 CAT_SEP = 'x'
+# Разделитель итерации цикла (CycleTemplateSeparator): система сама дописывает код итерации к шаблону
+# вопроса внутри questions.repeat — Q11x1 -> Q11x1xc6_1, как строку таблицы через «xr». Поэтому {3} в
+# шаблоне не пишем: с ним итерация в имени дважды (HCP, Aesthetics v2: Q11_1_6.6_1). Соглашение 31.10.2026.
+CYCLE_SEP = 'xc'
 
 
 def cat_name(base, cat, tail=''):
-    """Имя копии вопроса для категории: cat_name('Q9', 1) -> 'Q9x1', cat_name('Q11', 2, '_{3}') -> 'Q11x2_{3}'.
+    """Имя копии вопроса для категории: cat_name('Q9', 1) -> 'Q9x1', cat_name('Q15', 2, '_FROM') -> 'Q15x2_FROM'.
 
     «_» в выгрузке уже занят: слот множественного выбора (Q9_3), итерация цикла (Q11_19.19), и
     Q9_1_3 не отличить от «вопрос Q9_1, слот 3» и «вопрос Q9, категория 1, слот 3» без анкеты.
@@ -113,8 +117,12 @@ def common_functions(screen_text=DEFAULT_SCREEN_TEXT, refuse_text=DEFAULT_REFUSE
 
 class Questionnaire:
     def __init__(self, name, screen_text=DEFAULT_SCREEN_TEXT, refuse_text=DEFAULT_REFUSE_TEXT,
-                 questionnaire_flags=None, survey_flags=None):
+                 questionnaire_flags=None, survey_flags=None, cycle_sep=None):
         self.name = name
+        # Разделитель итерации цикла в именах переменных (новые анкеты — CYCLE_SEP, «xc»). None — поле в JSON
+        # не пишем, у системы по умолчанию «.»: так собраны HCP и Aesthetics v2 (с {3} в шаблонах циклов), и
+        # имена их колонок в поле менять нельзя.
+        self.cycle_sep = cycle_sep
         self.screen_text = screen_text
         self.refuse_text = refuse_text
         # по умолчанию: автоформирование имён переменных и новый сервис опросов («Запускать опрос в новой веб-дате»)
@@ -230,6 +238,8 @@ class Questionnaire:
             'ExportedSurveyFlags': self.survey_flags,
             'ScriptGlobalFunctions': functions,
         }
+        if self.cycle_sep:
+            data['CycleTemplateSeparator'] = self.cycle_sep
         for key, value in (('ScriptPreProcessing', self.preprocessing),
                            ('ScriptPostProcessing', self.postprocessing),
                            ('ScriptBeforeShow', self.before_show),
@@ -298,6 +308,7 @@ class Questionnaire:
             codes = [i['Code'] for i in a['AnswerItems']]
             assert len(codes) == len(set(codes)), f"список «{a['Name']}»: повторяются коды"
         self.check_other_choice_rows(data)
+        self.check_cycle_templates(data)
         self.check_references(data)
         self.check_js_syntax(data)
         self.check_multilingual_text(data)
@@ -368,6 +379,20 @@ class Questionnaire:
                     if int(num) not in numbers:
                         problems.append(f"Q{x['Number']} условие: нет вопроса Q{num}")
         assert not problems, '\n'.join(problems)
+
+    @staticmethod
+    def check_cycle_templates(data):
+        """С разделителем цикла (CycleTemplateSeparator) {3} в шаблоне — дубль итерации в имени.
+
+        Система сама дописывает код итерации через разделитель; {3} поставил бы его второй раз
+        (Q11x1_6xc6_1). Без разделителя (старые анкеты в поле) не проверяем: там {3} уже в данных.
+        """
+        if not data.get('CycleTemplateSeparator'):
+            return
+        bad = [f"Q{x['Number']} {x['OutputColumnTemplate']}" for x in data['Questions']
+               if '{3}' in (x.get('OutputColumnTemplate') or '')]
+        assert not bad, ('шаблон цикла без {3} — итерацию система допишет сама через «%s» '
+                         '(шпаргалка, раздел 8): %s' % (data['CycleTemplateSeparator'], ', '.join(bad)))
 
     @staticmethod
     def check_multilingual_text(data):
