@@ -7,9 +7,10 @@ import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(HERE, '..', '..', 'tools'))
-from ss_builder import Questionnaire, screen_if, refuse_if, cat_name, OTHER_TXT, BLOCKING  # noqa: E402
+from ss_builder import Questionnaire, screen_if, refuse_if, cat_name, CYCLE_SEP, OTHER_TXT, BLOCKING  # noqa: E402
 
-qnr = Questionnaire('Новая анкета')
+# cycle_sep: итерация цикла в именах через «xc» (Q11x1xc6_1), шаблон цикла — без {3} (шпаргалка, раздел 8)
+qnr = Questionnaire('Новая анкета', cycle_sep=CYCLE_SEP)
 q, alist = qnr.q, qnr.alist
 
 # --- Служебное (обязательно в каждой анкете, см. шпаргалку, раздел 8) -----------
