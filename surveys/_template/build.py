@@ -7,7 +7,7 @@ import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(HERE, '..', '..', 'tools'))
-from ss_builder import Questionnaire, screen_if, refuse_if, OTHER_TXT, BLOCKING  # noqa: E402
+from ss_builder import Questionnaire, screen_if, refuse_if, cat_name, OTHER_TXT, BLOCKING  # noqa: E402
 
 qnr = Questionnaire('Новая анкета')
 q, alist = qnr.q, qnr.alist
@@ -32,6 +32,11 @@ q(10, 'MultipleChoice', 'Какими брендами вы пользуетес
   AnswerList=alist('Бренды', {1: 'Бренд 1', 2: 'Бренд 2', 96: 'Другое (укажите)', 99: 'Никакими'},
                    {96: OTHER_TXT, 99: BLOCKING}),
   flags={'RandomizeAnswers': True})
+
+# Один и тот же вопрос по категориям — копии с номером категории через «x» (шпаргалка, раздел 8):
+# for c in (1, 2, 3):
+#     q(100 + c, 'MultipleChoice', f'Категория {c}: какие бренды вам известны?', name=cat_name('Q2', c),  # Q2x1…
+#       AnswerList=alist(f'Бренды кат.{c}', {...}))
 
 # Функции этой анкеты (общие функции из tools/ss_lib.js добавляются автоматически)
 qnr.global_functions = ''
